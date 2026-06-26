@@ -1,10 +1,10 @@
-# Maintainer: Seu Nome <voce@example.com>
+# Maintainer: Narayan Lima da Silva <narayan.song@gmail.com>
 pkgname=por-ai
 pkgver=0.1.6
 pkgrel=1
 pkgdesc="Chat privado com modelos do OpenRouter (GTK4/Adwaita)"
 arch=('any')
-url="https://github.com/SEU_USUARIO/por-ai"
+url="https://github.com/narayanls/por-ai"
 license=('GPL-3.0-or-later')
 depends=(
   'python'
