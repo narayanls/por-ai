@@ -1039,7 +1039,7 @@ class PorAiWindow(Adw.ApplicationWindow):
             application_name="POR.ai",
             application_icon="por-ai",
             version="0.1.6",
-            developer_name="Você",
+            developer_name="Narayan L. Silva - feito com Claude Sonnet",
             comments=(
                 "Private OpenRouter AI — um chat com modelos do OpenRouter, "
                 "rodando localmente para manter o controle dos seus arquivos."
