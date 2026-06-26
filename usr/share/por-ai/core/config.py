@@ -29,7 +29,7 @@ CONFIG_FILENAME = "config.json"
 DEFAULT_SYSTEM_PROMPT = (
     "Você é um assistente útil, direto e honesto. Responda em português do "
     "Brasil, a menos que o usuário peça outro idioma. Quando o usuário enviar "
-    "um arquivo para análise, trate-o como conteúdo de autoria dele e não o "
+    "um arquivo para análise, não o "
     "reescreva sem ser solicitado."
 )
 
