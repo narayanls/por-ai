@@ -27,6 +27,8 @@ from core.config import Config
 from core.storage import ConversationStore
 from ui.message_row import MessageRow
 from ui.preferences import PreferencesWindow
+from core.updater import UpdateChecker
+from ui.update_dialog import UpdateDialog
 
 _CSS = b"""
 .message-bubble {
@@ -58,6 +60,7 @@ class PorAiWindow(Adw.ApplicationWindow):
         self.config = config
         self.assistant = ChatAssistant(config)
         self.store = ConversationStore()
+        self._updater = UpdateChecker()
 
         # Conversa atual: lista de mensagens com role/content/display.
         # 'content' é o que vai à API (inclui texto de anexos); 'display' é o
@@ -79,6 +82,9 @@ class PorAiWindow(Adw.ApplicationWindow):
 
         # Foca o campo de entrada assim que a janela aparecer na tela.
         self.connect("map", lambda *_: self._input_view.grab_focus())
+
+        #Verifica atualizações silenciosamente
+        GLib.timeout_add_seconds(5, self._check_update_silently)
 
         if not self.config.is_configured():
             GLib.idle_add(self._prompt_for_api_key)
@@ -111,6 +117,7 @@ class PorAiWindow(Adw.ApplicationWindow):
             "refresh-models": self._on_refresh_models,
             "preferences": self._on_preferences,
             "about": self._on_about,
+            "check-update": self._on_check_update,
         }
         for name, callback in actions.items():
             action = Gio.SimpleAction.new(name, None)
@@ -199,6 +206,7 @@ class PorAiWindow(Adw.ApplicationWindow):
         menu.append("Atualizar modelos do OpenRouter", "win.refresh-models")
         menu.append("Preferências", "win.preferences")
         menu.append("Sobre o POR.ai", "win.about")
+        menu.append("Verificar atualizações", "win.check-update")
 
         menu_button = Gtk.MenuButton()
         menu_button.set_icon_name("open-menu-symbolic")
@@ -1025,6 +1033,32 @@ class PorAiWindow(Adw.ApplicationWindow):
         self._model_list = list(model_ids)
         self._select_model(current if current in model_ids else model_ids[0])
         self._toast(f"{len(model_ids)} modelos disponíveis.")
+        return False
+
+    def _check_update_silently(self) -> bool:
+        self._updater.check_async(
+            on_update_available=lambda release, local: GLib.idle_add(
+                self._show_update_dialog, release, local
+            ),
+        )
+        return False
+
+    def _on_check_update(self, *_args) -> None:
+        self._toast("Verificando atualizações…")
+        self._updater.check_async(
+            on_update_available=lambda release, local: GLib.idle_add(
+                self._show_update_dialog, release, local
+            ),
+            on_no_update=lambda: GLib.idle_add(
+                self._toast, "O POR.ai já está na versão mais recente."
+            ),
+            on_error=lambda msg: GLib.idle_add(
+                self._toast, f"Não foi possível verificar atualizações: {msg}"
+            ),
+        )
+
+    def _show_update_dialog(self, release: dict, local_version: str) -> bool:
+        UpdateDialog(self, release, local_version, self._updater)
         return False
 
     def _on_preferences(self, *_args) -> None:
