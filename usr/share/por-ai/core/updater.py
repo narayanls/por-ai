@@ -6,7 +6,8 @@ Fluxo:
   2. Consulta a API do GitHub para obter a última release
   3. Compara as versões (semver simples)
   4. Se houver atualização, detecta o sistema e baixa o pacote correto
-  5. Abre o pacote com xdg-open para o instalador do sistema assumir
+  5. Instala o pacote com o gerenciador nativo (pacman -U / apt install),
+     elevando privilégio via pkexec (ou terminal + sudo como fallback)
 """
 
 from __future__ import annotations
@@ -14,10 +15,12 @@ from __future__ import annotations
 import logging
 import os
 import re
+import shlex
+import shutil
 import subprocess
 import tempfile
 import threading
-from typing import Any, Callable, Dict, Optional
+from typing import Any, Callable, Dict, Optional, Tuple
 
 logger = logging.getLogger(__name__)
 
@@ -126,11 +129,124 @@ def download_asset(
                         on_progress(downloaded, total)
 
 
-# ── Abertura com instalador do sistema ────────────────────────────────────────
+# ── Instalação com o gerenciador de pacotes nativo ────────────────────────────
 
-def open_with_system_installer(path: str) -> None:
-    """Abre o pacote com xdg-open para o instalador do sistema assumir."""
-    subprocess.Popen(["xdg-open", path])
+def _install_argv(system: str, path: str) -> Optional[list]:
+    """Monta o comando de instalação nativo (sem o sudo/pkexec)."""
+    if system == "arch":
+        # -U instala um pacote local; --noconfirm para não travar pedindo input.
+        return ["pacman", "-U", "--noconfirm", path]
+    if system == "deb":
+        # apt resolve dependências do repositório; precisa do caminho absoluto.
+        return ["apt-get", "install", "-y", path]
+    return None
+
+
+def _find_terminal() -> Optional[Tuple[str, str]]:
+    """Retorna (comando, flag_de_exec) do primeiro terminal encontrado."""
+    terminals = [
+        ("gnome-terminal", "--"),
+        ("konsole", "-e"),
+        ("xfce4-terminal", "-e"),
+        ("mate-terminal", "-e"),
+        ("alacritty", "-e"),
+        ("kitty", "-e"),
+        ("ptyxis", "--"),
+        ("tilix", "-e"),
+        ("xterm", "-e"),
+        ("terminator", "-x"),
+    ]
+    for cmd, flag in terminals:
+        if shutil.which(cmd):
+            return cmd, flag
+    return None
+
+
+def install_package(
+    path: str,
+    system: str,
+    on_status: Optional[Callable[[str], None]] = None,
+) -> Tuple[bool, str]:
+    """
+    Instala o pacote baixado usando o gerenciador nativo, com elevação de
+    privilégio. Retorna (sucesso, mensagem_de_erro).
+
+    Estratégia (igual ao Tac Writer):
+      1. pkexec  → prompt gráfico de senha, código de saída real (preferido)
+      2. terminal + sudo → fallback quando não há agente polkit/pkexec
+    """
+    argv = _install_argv(system, path)
+    if argv is None:
+        return False, "Sistema não suportado para instalação automática."
+
+    # 1) pkexec: janela gráfica de senha e código de saída confiável.
+    if shutil.which("pkexec"):
+        if on_status:
+            on_status(
+                "Instalando… confirme a senha de administrador na "
+                "janela do sistema."
+            )
+        try:
+            proc = subprocess.run(
+                ["pkexec"] + argv,
+                capture_output=True,
+                text=True,
+            )
+        except Exception as exc:  # pylint: disable=broad-except
+            return False, f"Falha ao iniciar o instalador: {exc}"
+
+        if proc.returncode == 0:
+            return True, ""
+        if proc.returncode == 126:
+            return False, "Autenticação cancelada pelo usuário."
+        if proc.returncode != 127:
+            # 127 = pkexec não conseguiu autorizar/executar → tenta terminal.
+            # Qualquer outro código é erro real do pacman/apt.
+            detail = (proc.stderr or proc.stdout or "").strip()
+            detail = detail.splitlines()[-1] if detail else ""
+            return False, detail or f"Instalador retornou código {proc.returncode}."
+
+    # 2) Fallback: abre um terminal e roda com sudo, usando um arquivo
+    #    sentinela para detectar sucesso (o código de saída do terminal não
+    #    reflete o do comando interno).
+    term = _find_terminal()
+    if term is None:
+        manual = "sudo " + " ".join(shlex.quote(a) for a in argv)
+        return False, (
+            "Não foi possível instalar automaticamente (sem pkexec nem "
+            f"terminal). Instale manualmente com:\n{manual}"
+        )
+
+    cmd, flag = term
+    sentinel = os.path.join(
+        tempfile.gettempdir(), f"por-ai-install-{os.getpid()}.ok"
+    )
+    try:
+        if os.path.exists(sentinel):
+            os.remove(sentinel)
+    except OSError:
+        pass
+
+    inner = (
+        "sudo " + " ".join(shlex.quote(a) for a in argv)
+        + f" && touch {shlex.quote(sentinel)}; "
+        + "echo; read -n1 -r -p 'Instalação finalizada. "
+        + "Pressione qualquer tecla para fechar…'"
+    )
+    if on_status:
+        on_status("Instalando… digite sua senha no terminal que abriu.")
+    try:
+        subprocess.run([cmd, flag, "bash", "-c", inner])
+    except Exception as exc:  # pylint: disable=broad-except
+        return False, f"Falha ao abrir o terminal: {exc}"
+
+    if os.path.exists(sentinel):
+        try:
+            os.remove(sentinel)
+        except OSError:
+            pass
+        return True, ""
+    return False, "A instalação não foi concluída (verifique o terminal)."
 
 
 # ── Verificação completa (roda em thread) ─────────────────────────────────────
@@ -206,12 +322,14 @@ class UpdateChecker:
         self,
         release: Dict[str, Any],
         on_progress: Optional[Callable[[int, int], None]] = None,
+        on_status: Optional[Callable[[str], None]] = None,
         on_done: Optional[Callable[[str], None]] = None,
         on_error: Optional[Callable[[str], None]] = None,
     ) -> None:
         """
-        Baixa o pacote em /tmp e abre com o instalador do sistema.
-        Todos os callbacks chamados na thread de trabalho.
+        Baixa o pacote em /tmp e o instala com o gerenciador nativo.
+        Todos os callbacks são chamados na thread de trabalho — use
+        GLib.idle_add na camada de UI.
         """
         url = self.find_asset_url(release)
         if not url:
@@ -228,9 +346,14 @@ class UpdateChecker:
         def worker() -> None:
             try:
                 download_asset(url, dest, on_progress=on_progress)
-                open_with_system_installer(dest)
-                if on_done:
-                    on_done(dest)
+                success, message = install_package(
+                    dest, self._system, on_status=on_status
+                )
+                if success:
+                    if on_done:
+                        on_done(dest)
+                elif on_error:
+                    on_error(message)
             except Exception as exc:  # pylint: disable=broad-except
                 if on_error:
                     on_error(str(exc))
