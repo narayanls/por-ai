@@ -27,8 +27,13 @@ from core.config import Config
 from core.storage import ConversationStore
 from ui.message_row import MessageRow
 from ui.preferences import PreferencesWindow
-from core.updater import UpdateChecker
-from ui.update_dialog import UpdateDialog
+
+try:
+    from core.updater import UpdateChecker
+    from ui.update_dialog import UpdateDialog
+    _UPDATE_AVAILABLE = True
+except Exception:  # pylint: disable=broad-except
+    _UPDATE_AVAILABLE = False
 
 _CSS = b"""
 .message-bubble {
@@ -60,7 +65,7 @@ class PorAiWindow(Adw.ApplicationWindow):
         self.config = config
         self.assistant = ChatAssistant(config)
         self.store = ConversationStore()
-        self._updater = UpdateChecker()
+        self._updater = UpdateChecker() if _UPDATE_AVAILABLE else None
 
         # Conversa atual: lista de mensagens com role/content/display.
         # 'content' é o que vai à API (inclui texto de anexos); 'display' é o
@@ -84,7 +89,8 @@ class PorAiWindow(Adw.ApplicationWindow):
         self.connect("map", lambda *_: self._input_view.grab_focus())
 
         #Verifica atualizações silenciosamente
-        GLib.timeout_add_seconds(5, self._check_update_silently)
+        if _UPDATE_AVAILABLE:
+            GLib.timeout_add_seconds(5, self._check_update_silently)
 
         if not self.config.is_configured():
             GLib.idle_add(self._prompt_for_api_key)
@@ -839,7 +845,7 @@ class PorAiWindow(Adw.ApplicationWindow):
 
     def _make_conv_row(self, meta: Dict[str, Any]) -> Gtk.ListBoxRow:
         row = Gtk.ListBoxRow()
-        row.set_name(meta["id"])  # guarda o id no nome do widget
+        row.set_name(meta["id"])
 
         box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=6)
         box.set_margin_top(6)
@@ -864,38 +870,37 @@ class PorAiWindow(Adw.ApplicationWindow):
 
         box.append(text_box)
 
-        # Botão renomear.
+        # Botões ocultos por padrão — aparecem só no hover.
+        btn_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=0)
+        btn_box.set_visible(False)
+        btn_box.set_valign(Gtk.Align.CENTER)
+
         rename = Gtk.Button()
         rename.set_icon_name("document-edit-symbolic")
         rename.add_css_class("flat")
-        rename.set_valign(Gtk.Align.CENTER)
-        rename.set_tooltip_text("Renomear conversa")
+        rename.set_tooltip_text("Renomear")
         rename.connect(
             "clicked",
             lambda *_: self._on_rename_conv(meta["id"], meta["title"]),
         )
-        box.append(rename)
+        btn_box.append(rename)
 
         delete = Gtk.Button()
         delete.set_icon_name("user-trash-symbolic")
         delete.add_css_class("flat")
-        delete.set_valign(Gtk.Align.CENTER)
-        delete.set_tooltip_text("Excluir conversa")
+        delete.set_tooltip_text("Excluir")
         delete.connect("clicked", lambda *_: self._on_delete_conv(meta["id"]))
-        box.append(delete)
+        btn_box.append(delete)
 
-        # Duplo clique na linha também abre o renomear.
-        gesture = Gtk.GestureClick()
-        gesture.set_button(1)  # botão esquerdo
-        gesture.connect(
-            "pressed",
-            lambda g, n, x, y: self._on_rename_conv(meta["id"], meta["title"])
-            if n == 2
-            else None,
-        )
-        row.add_controller(gesture)
-
+        box.append(btn_box)
         row.set_child(box)
+
+        # Mostra/oculta os botões conforme o mouse entra/sai da linha.
+        motion = Gtk.EventControllerMotion()
+        motion.connect("enter", lambda *_: btn_box.set_visible(True))
+        motion.connect("leave", lambda *_: btn_box.set_visible(False))
+        row.add_controller(motion)
+
         return row
 
     @staticmethod
@@ -917,6 +922,7 @@ class PorAiWindow(Adw.ApplicationWindow):
 
     def _on_conv_activated(self, _listbox, row: Gtk.ListBoxRow) -> None:
         conv_id = row.get_name()
+        print(f"[DEBUG] row-activated: conv_id={conv_id!r}", flush=True)
         if conv_id and conv_id != self._current_conv_id:
             self._load_conversation(conv_id)
         # Em modo recolhido, esconde a sidebar após escolher.
@@ -969,6 +975,10 @@ class PorAiWindow(Adw.ApplicationWindow):
         self._set_busy(False)
         self._scroll_to_bottom()
         GLib.idle_add(self._input_view.grab_focus)
+
+    def _on_delete_conv(self, conv_id: str) -> None:
+        print(f"[DEBUG] _on_delete_conv chamado: conv_id={conv_id!r}", flush=True)
+        import traceback; traceback.print_stack()
         self.store.delete(conv_id)
         if conv_id == self._current_conv_id:
             self._reset_chat_view()
@@ -1036,6 +1046,8 @@ class PorAiWindow(Adw.ApplicationWindow):
         return False
 
     def _check_update_silently(self) -> bool:
+        if not self._updater:
+            return False
         self._updater.check_async(
             on_update_available=lambda release, local: GLib.idle_add(
                 self._show_update_dialog, release, local
@@ -1044,6 +1056,9 @@ class PorAiWindow(Adw.ApplicationWindow):
         return False
 
     def _on_check_update(self, *_args) -> None:
+        if not self._updater:
+            self._toast("Verificação de atualizações não disponível.")
+            return
         self._toast("Verificando atualizações…")
         self._updater.check_async(
             on_update_available=lambda release, local: GLib.idle_add(
@@ -1058,7 +1073,8 @@ class PorAiWindow(Adw.ApplicationWindow):
         )
 
     def _show_update_dialog(self, release: dict, local_version: str) -> bool:
-        UpdateDialog(self, release, local_version, self._updater)
+        if _UPDATE_AVAILABLE:
+            UpdateDialog(self, release, local_version, self._updater)
         return False
 
     def _on_preferences(self, *_args) -> None:

@@ -13,14 +13,11 @@ from __future__ import annotations
 
 import logging
 import os
-import platform
 import re
 import subprocess
 import tempfile
 import threading
 from typing import Any, Callable, Dict, Optional
-
-import requests
 
 logger = logging.getLogger(__name__)
 
@@ -89,6 +86,7 @@ def fetch_latest_release(timeout: int = 10) -> Dict[str, Any]:
     Retorna o dict da última release do GitHub.
     Campos relevantes: tag_name, body, assets[].browser_download_url
     """
+    import requests
     response = requests.get(
         GITHUB_API,
         headers={"Accept": "application/vnd.github+json"},
@@ -114,6 +112,7 @@ def download_asset(
     Baixa um asset do GitHub para dest_path.
     on_progress(bytes_baixados, total_bytes) chamado a cada chunk.
     """
+    import requests
     with requests.get(url, stream=True, timeout=timeout) as response:
         response.raise_for_status()
         total = int(response.headers.get("content-length", 0))
