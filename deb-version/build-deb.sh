@@ -12,6 +12,9 @@ VERSION="0.1.6.1"
 find usr -type d -name '__pycache__' -exec rm -rf {} + 2>/dev/null || true
 find usr -type f -name '*.pyc'       -delete              2>/dev/null || true
 
+# Grava a versão no version.txt para o updater do app.
+echo "v${VERSION}" > usr/share/por-ai/version.txt
+
 # Todos os .py ficam com 644, depois repõe +x nos dois executáveis.
 find usr/share/por-ai -type f -name '*.py' | xargs chmod 644
 chmod 755 usr/bin/por-ai
