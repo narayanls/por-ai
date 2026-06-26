@@ -884,15 +884,18 @@ class PorAiWindow(Adw.ApplicationWindow):
         delete.connect("clicked", lambda *_: self._on_delete_conv(meta["id"]))
         box.append(delete)
 
-        # Duplo clique na linha também abre o renomear.
+        # Duplo clique na linha abre o renomear.
+        # set_propagation_phase(CAPTURE) garante que o gesto vê o evento antes
+        # dos widgets filhos, e claim_on_double_click impede que o clique simples
+        # seja consumido (deixa o row-activated da ListBox funcionar normalmente).
         gesture = Gtk.GestureClick()
-        gesture.set_button(1)  # botão esquerdo
-        gesture.connect(
-            "pressed",
-            lambda g, n, x, y: self._on_rename_conv(meta["id"], meta["title"])
-            if n == 2
-            else None,
-        )
+        gesture.set_button(1)
+        gesture.set_propagation_phase(Gtk.PropagationPhase.CAPTURE)
+        def _on_gesture_pressed(g, n, x, y):
+            if n == 2:
+                g.set_state(Gtk.EventSequenceState.CLAIMED)
+                self._on_rename_conv(meta["id"], meta["title"])
+        gesture.connect("pressed", _on_gesture_pressed)
         row.add_controller(gesture)
 
         row.set_child(box)
