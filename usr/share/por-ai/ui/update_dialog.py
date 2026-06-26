@@ -71,7 +71,7 @@ class UpdateDialog(Adw.AlertDialog):
             return
         self._downloading = True
 
-        # Troca o botão por um spinner enquanto baixa.
+        # Troca o botão por um spinner enquanto baixa/instala.
         self.set_response_enabled("update", False)
         self.set_response_enabled("later", False)
         self.set_body("Baixando atualização…")
@@ -79,6 +79,7 @@ class UpdateDialog(Adw.AlertDialog):
         self._checker.download_and_open(
             self._release,
             on_progress=self._on_progress,
+            on_status=self._on_status,
             on_done=self._on_done,
             on_error=self._on_error,
         )
@@ -89,16 +90,21 @@ class UpdateDialog(Adw.AlertDialog):
             GLib.idle_add(self.set_body, f"Baixando… {pct}%")
         return False
 
+    def _on_status(self, message: str) -> bool:
+        GLib.idle_add(self.set_body, message)
+        return False
+
     def _on_done(self, _path: str) -> bool:
         GLib.idle_add(
             self.set_body,
-            "Download concluído. O instalador do sistema foi aberto.",
+            "POR.ai atualizado com sucesso! "
+            "Reinicie o aplicativo para usar a nova versão.",
         )
         GLib.idle_add(self.set_response_enabled, "later", True)
         return False
 
     def _on_error(self, message: str) -> bool:
-        GLib.idle_add(self.set_body, f"Erro ao baixar: {message}")
+        GLib.idle_add(self.set_body, f"Erro ao atualizar: {message}")
         GLib.idle_add(self.set_response_enabled, "update", True)
         GLib.idle_add(self.set_response_enabled, "later", True)
         self._downloading = False
