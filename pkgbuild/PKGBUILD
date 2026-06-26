@@ -35,6 +35,9 @@ package() {
   # Copia a árvore inteira para dentro do pacote.
   cp -a "$src/usr" "$pkgdir/usr"
 
+  # Grava a versão da tag no version.txt para o updater do app.
+  echo "v${pkgver}-${pkgrel}" > "$pkgdir/usr/share/por-ai/version.txt"
+
   # Remove caches de bytecode que possam ter sido gerados rodando em dev.
   find "$pkgdir" -type d -name '__pycache__' -exec rm -rf {} + 2>/dev/null || true
   find "$pkgdir" -type f -name '*.pyc' -delete 2>/dev/null || true
