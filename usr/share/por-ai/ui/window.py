@@ -77,6 +77,9 @@ class PorAiWindow(Adw.ApplicationWindow):
         self._install_actions()
         self._build_ui()
 
+        # Foca o campo de entrada assim que a janela aparecer na tela.
+        self.connect("map", lambda *_: self._input_view.grab_focus())
+
         if not self.config.is_configured():
             GLib.idle_add(self._prompt_for_api_key)
 
@@ -765,6 +768,7 @@ class PorAiWindow(Adw.ApplicationWindow):
         self._placeholder = None
         self._show_placeholder()
         self._set_busy(False)
+        GLib.idle_add(self._input_view.grab_focus)
 
     def _on_new_chat(self, *_args) -> None:
         # A conversa anterior já está salva (persistimos a cada turno), então
@@ -956,12 +960,12 @@ class PorAiWindow(Adw.ApplicationWindow):
 
         self._set_busy(False)
         self._scroll_to_bottom()
-
-    def _on_delete_conv(self, conv_id: str) -> None:
+        GLib.idle_add(self._input_view.grab_focus)
         self.store.delete(conv_id)
         if conv_id == self._current_conv_id:
             self._reset_chat_view()
         self._reload_sidebar(select_current=True)
+
 
     def _on_rename_conv(self, conv_id: str, current_title: str) -> None:
         """Abre um diálogo para renomear a conversa."""
