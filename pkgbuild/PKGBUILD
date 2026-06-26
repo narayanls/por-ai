@@ -1,0 +1,45 @@
+# Maintainer: Seu Nome <voce@example.com>
+pkgname=por-ai
+pkgver=0.1.6
+pkgrel=1
+pkgdesc="Chat privado com modelos do OpenRouter (GTK4/Adwaita)"
+arch=('any')
+url="https://github.com/SEU_USUARIO/por-ai"
+license=('GPL-3.0-or-later')
+depends=(
+  'python'
+  'gtk4'
+  'libadwaita'
+  'python-gobject'
+  'python-requests'
+  'python-pypdf'
+  'hicolor-icon-theme'
+  'python-odfpy'
+)
+# Pacote local: não baixa nada. Empacota a árvore usr/ que já existe no repo.
+# Por isso source=() está vazio e os arquivos são lidos de $startdir.
+
+package() {
+  # Descobre onde está a pasta usr/ (funciona com o PKGBUILD na raiz do repo
+  # ou dentro de uma subpasta tipo packaging/ — usr/ fica em ../).
+  local src
+  if [[ -d "$startdir/usr" ]]; then
+    src="$startdir"
+  elif [[ -d "$startdir/../usr" ]]; then
+    src="$startdir/.."
+  else
+    echo "ERRO: não encontrei a pasta 'usr/' ao lado do PKGBUILD." >&2
+    return 1
+  fi
+
+  # Copia a árvore inteira para dentro do pacote.
+  cp -a "$src/usr" "$pkgdir/usr"
+
+  # Remove caches de bytecode que possam ter sido gerados rodando em dev.
+  find "$pkgdir" -type d -name '__pycache__' -exec rm -rf {} + 2>/dev/null || true
+  find "$pkgdir" -type f -name '*.pyc' -delete 2>/dev/null || true
+
+  # Garante o bit de execução no launcher e no main.
+  chmod 755 "$pkgdir/usr/bin/por-ai"
+  chmod 755 "$pkgdir/usr/share/por-ai/main.py"
+}

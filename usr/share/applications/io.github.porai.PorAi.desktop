@@ -1,0 +1,12 @@
+[Desktop Entry]
+Type=Application
+Name=POR.ai
+GenericName=Chat com IA
+Comment=Chat privado com modelos do OpenRouter
+Exec=por-ai
+Icon=por-ai
+Terminal=false
+Categories=Utility;Network;Chat;GTK;
+Keywords=ia;ai;chat;openrouter;llm;assistente;
+StartupNotify=true
+StartupWMClass=io.github.porai.PorAi
