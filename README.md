@@ -51,7 +51,7 @@ sudo pacman -U por-ai-*.pkg.tar.zst
 
 ### Debian e derivados
 
-Baixe o `.deb` na [página de releases](https://github.com/narayanls/por-ai/releases/latest) e instale com:
+Baixe o `.deb` na [página de releases](https://github.com/narayanls/por-ai/releases/latest) e instale com **duplo clique** no arquivo ou com:
 
 ```sh
 sudo apt install ./por-ai_*.deb
