@@ -66,10 +66,10 @@ class PreferencesWindow(Adw.PreferencesWindow):
         self._site_name_row.set_text(self.config.site_name)
         group.add(self._site_name_row)
 
-        self._site_url_row = Adw.EntryRow()
-        self._site_url_row.set_title("URL do site (HTTP-Referer)")
-        self._site_url_row.set_text(self.config.site_url)
-        group.add(self._site_url_row)
+        #self._site_url_row = Adw.EntryRow()
+        #self._site_url_row.set_title("URL do site (HTTP-Referer)")
+        #self._site_url_row.set_text(self.config.site_url)
+        #group.add(self._site_url_row)
 
         page.add(group)
 
@@ -185,7 +185,7 @@ class PreferencesWindow(Adw.PreferencesWindow):
     def _on_close(self, *_args) -> bool:
         self.config.api_key = self._api_key_row.get_text()
         self.config.set("site_name", self._site_name_row.get_text().strip())
-        self.config.set("site_url", self._site_url_row.get_text().strip())
+        #self.config.set("site_url", self._site_url_row.get_text().strip())
         self.config.set("stream", self._stream_row.get_active())
         self.config.set("temperature", round(self._temperature_scale.get_value(), 2))
         self.config.set("system_prompt", self._buffer_text(self._prompt_view))

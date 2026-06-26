@@ -1054,7 +1054,7 @@ class PorAiWindow(Adw.ApplicationWindow):
     # ------------------------------------------------------------------ #
 
     def _prompt_for_api_key(self) -> bool:
-        self._toast("Bem-vinda! Defina sua chave da API em Preferências.")
+        self._toast("Bem-vindo! Defina sua chave da API em Preferências.")
         return False
 
     def _toast(self, message: str) -> None:
