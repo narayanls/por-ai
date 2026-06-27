@@ -32,8 +32,15 @@ try:
     from core.updater import UpdateChecker
     from ui.update_dialog import UpdateDialog
     _UPDATE_AVAILABLE = True
-except Exception:  # pylint: disable=broad-except
+except Exception as _exc:  # pylint: disable=broad-except
+    import traceback
+    print(f"[POR.ai] Recurso de atualização DESATIVADO: {_exc}", flush=True)
+    traceback.print_exc()
     _UPDATE_AVAILABLE = False
+
+# Versão embutida do app — fonte única, usada na janela "Sobre" e como
+# fallback do verificador de updates quando o version.txt não existe.
+APP_VERSION = "0.1.7"
 
 _CSS = b"""
 .message-bubble {
@@ -65,7 +72,7 @@ class PorAiWindow(Adw.ApplicationWindow):
         self.config = config
         self.assistant = ChatAssistant(config)
         self.store = ConversationStore()
-        self._updater = UpdateChecker() if _UPDATE_AVAILABLE else None
+        self._updater = UpdateChecker(APP_VERSION) if _UPDATE_AVAILABLE else None
 
         # Conversa atual: lista de mensagens com role/content/display.
         # 'content' é o que vai à API (inclui texto de anexos); 'display' é o
@@ -1052,6 +1059,13 @@ class PorAiWindow(Adw.ApplicationWindow):
             on_update_available=lambda release, local: GLib.idle_add(
                 self._show_update_dialog, release, local
             ),
+            # Silencioso na UI, mas registra no console para depuração.
+            on_no_update=lambda: print(
+                "[POR.ai] Verificação silenciosa: já está atualizado.", flush=True
+            ),
+            on_error=lambda msg: print(
+                f"[POR.ai] Verificação silenciosa falhou: {msg}", flush=True
+            ),
         )
         return False
 
@@ -1073,6 +1087,11 @@ class PorAiWindow(Adw.ApplicationWindow):
         )
 
     def _show_update_dialog(self, release: dict, local_version: str) -> bool:
+        print(
+            f"[POR.ai] Abrindo diálogo de atualização "
+            f"(local={local_version}, remota={release.get('tag_name')}).",
+            flush=True,
+        )
         if _UPDATE_AVAILABLE:
             UpdateDialog(self, release, local_version, self._updater)
         return False
@@ -1092,7 +1111,7 @@ class PorAiWindow(Adw.ApplicationWindow):
             transient_for=self,
             application_name="POR.ai",
             application_icon="por-ai",
-            version="0.1.6",
+            version=APP_VERSION,
             developer_name="Narayan L. Silva - feito com Claude Sonnet",
             comments=(
                 "Private OpenRouter AI — um chat com modelos do OpenRouter, "
