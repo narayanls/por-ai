@@ -1,6 +1,6 @@
 # Maintainer: Narayan Lima da Silva <narayan.song@gmail.com>
 pkgname=por-ai
-pkgver=0.1.7.1
+pkgver=0.1.7.0
 pkgrel=1
 pkgdesc="Chat privado com modelos do OpenRouter (GTK4/Adwaita)"
 arch=('any')

@@ -30,6 +30,13 @@ VERSION_FILE = "/usr/share/por-ai/version.txt"
 # API do GitHub — sem autenticação, limite de 60 req/hora por IP (suficiente).
 GITHUB_API = "https://api.github.com/repos/narayanls/por-ai/releases/latest"
 
+# O GitHub exige um User-Agent descritivo; sem ele (ou com o genérico do
+# python-requests) a API costuma responder HTTP 403.
+USER_AGENT = "por-ai-update-checker/1.0 (+https://github.com/narayanls/por-ai)"
+
+# Nome do pacote, usado para extrair a versão do nome do asset.
+PKG_NAME = "por-ai"
+
 
 # ── Detecção de sistema ───────────────────────────────────────────────────────
 
@@ -54,6 +61,32 @@ def _asset_suffix(system: str) -> str:
     return ".pkg.tar.zst" if system == "arch" else ".deb"
 
 
+def _version_from_asset_name(name: str) -> Optional[str]:
+    """
+    Extrai a versão do nome do asset — ou seja, a versão REAL do pacote
+    (pkgver), que é o que o version.txt registra após a instalação.
+
+      por-ai-0.1.7.3-1-any.pkg.tar.zst  ->  0.1.7.3-1
+      por-ai_0.1.7.3_all.deb            ->  0.1.7.3
+
+    Comparar contra isto (em vez da tag do git) evita o descasamento entre
+    o esquema da tag e o esquema do pacote.
+    """
+    if name.endswith(".pkg.tar.zst"):
+        # <pkgname>-<pkgver>-<pkgrel>-<arch>.pkg.tar.zst
+        m = re.match(
+            rf"^{re.escape(PKG_NAME)}-(.+)-[^-]+\.pkg\.tar\.zst$", name
+        )
+        if m:
+            return m.group(1)
+    elif name.endswith(".deb"):
+        # <pkgname>_<version>_<arch>.deb
+        m = re.match(rf"^{re.escape(PKG_NAME)}_(.+?)_[^_]+\.deb$", name)
+        if m:
+            return m.group(1)
+    return None
+
+
 # ── Leitura da versão local ───────────────────────────────────────────────────
 
 def read_local_version() -> Optional[str]:
@@ -67,19 +100,31 @@ def read_local_version() -> Optional[str]:
 
 # ── Comparação de versões ─────────────────────────────────────────────────────
 
-def _version_tuple(version: str):
-    """Converte '0.1.6' ou 'v0.1.6' em (0, 1, 6) para comparação."""
-    clean = version.lstrip("v").split("-")[0]   # remove 'v' e sufixos como '-1'
+def _version_tuple(version: str) -> tuple:
+    """
+    Converte 'v0.1.7.1-2' em (0, 1, 7, 1, 2) para comparação.
+
+    O sufixo de revisão ('-1', '-2'…) NÃO é descartado — ele entra como mais
+    um número de versão, igual ao Tac Writer. Assim 'v0.1.7.1-1' e
+    'v0.1.7.1-2' deixam de ser considerados iguais.
+    """
+    clean = version.strip().lstrip("v")
+    # Remove o epoch (ex.: '1:0.1.7') se existir, para não quebrar o .isdigit().
+    if ":" in clean:
+        clean = clean.split(":", 1)[-1]
     parts = re.split(r"[.\-]", clean)
-    try:
-        return tuple(int(p) for p in parts if p.isdigit())
-    except ValueError:
-        return (0,)
+    nums = [int(p) for p in parts if p.isdigit()]
+    return tuple(nums) if nums else (0,)
 
 
 def is_newer(remote: str, local: str) -> bool:
     """True se a versão remota for maior que a local."""
-    return _version_tuple(remote) > _version_tuple(local)
+    rt, lt = _version_tuple(remote), _version_tuple(local)
+    # Iguala o comprimento para uma comparação posicional consistente.
+    length = max(len(rt), len(lt))
+    rt += (0,) * (length - len(rt))
+    lt += (0,) * (length - len(lt))
+    return rt > lt
 
 
 # ── Consulta à API do GitHub ──────────────────────────────────────────────────
@@ -90,12 +135,41 @@ def fetch_latest_release(timeout: int = 10) -> Dict[str, Any]:
     Campos relevantes: tag_name, body, assets[].browser_download_url
     """
     import requests
-    response = requests.get(
-        GITHUB_API,
-        headers={"Accept": "application/vnd.github+json"},
-        timeout=timeout,
-    )
+    headers = {
+        "Accept": "application/vnd.github+json",
+        "User-Agent": USER_AGENT,
+        "X-GitHub-Api-Version": "2022-11-28",
+    }
+    # Opcional: token do GitHub eleva o limite de 60 → 5000 req/hora. Útil em
+    # dev para não esbarrar no 403 ao testar repetidamente. Ignorado se ausente.
+    token = os.environ.get("GITHUB_TOKEN") or os.environ.get("POR_AI_GITHUB_TOKEN")
+    if token:
+        headers["Authorization"] = f"Bearer {token}"
+
+    response = requests.get(GITHUB_API, headers=headers, timeout=timeout)
     response.encoding = "utf-8"
+
+    if response.status_code == 403:
+        # 403 do GitHub é quase sempre limite de requisições por IP
+        # (60/hora sem autenticação) ou User-Agent ausente/bloqueado.
+        remaining = response.headers.get("X-RateLimit-Remaining")
+        reset = response.headers.get("X-RateLimit-Reset")
+        if remaining == "0" and reset:
+            import datetime
+            try:
+                when = datetime.datetime.fromtimestamp(int(reset))
+                quando = f" Tente novamente após {when:%H:%M}."
+            except (ValueError, OSError):
+                quando = ""
+            raise RuntimeError(
+                "Limite de requisições do GitHub atingido "
+                f"(60/hora por IP).{quando}"
+            )
+        raise RuntimeError(
+            "GitHub recusou a requisição (HTTP 403) — possível limite de "
+            "requisições ou User-Agent bloqueado."
+        )
+
     if response.status_code != 200:
         raise RuntimeError(
             f"GitHub respondeu HTTP {response.status_code}."
@@ -116,7 +190,12 @@ def download_asset(
     on_progress(bytes_baixados, total_bytes) chamado a cada chunk.
     """
     import requests
-    with requests.get(url, stream=True, timeout=timeout) as response:
+    with requests.get(
+        url,
+        stream=True,
+        timeout=timeout,
+        headers={"User-Agent": USER_AGENT},
+    ) as response:
         response.raise_for_status()
         total = int(response.headers.get("content-length", 0))
         downloaded = 0
@@ -134,11 +213,13 @@ def download_asset(
 def _install_argv(system: str, path: str) -> Optional[list]:
     """Monta o comando de instalação nativo (sem o sudo/pkexec)."""
     if system == "arch":
-        # -U instala um pacote local; --noconfirm para não travar pedindo input.
-        return ["pacman", "-U", "--noconfirm", path]
+        # Caminho absoluto: o pkexec não herda o PATH e algumas políticas do
+        # polkit exigem o caminho completo do programa.
+        pacman = shutil.which("pacman") or "pacman"
+        return [pacman, "-U", "--noconfirm", path]
     if system == "deb":
-        # apt resolve dependências do repositório; precisa do caminho absoluto.
-        return ["apt-get", "install", "-y", path]
+        apt = shutil.which("apt-get") or "apt-get"
+        return [apt, "install", "-y", path]
     return None
 
 
@@ -186,6 +267,7 @@ def install_package(
                 "Instalando… confirme a senha de administrador na "
                 "janela do sistema."
             )
+        print(f"[POR.ai] Instalando via pkexec: {' '.join(argv)}", flush=True)
         try:
             proc = subprocess.run(
                 ["pkexec"] + argv,
@@ -252,8 +334,11 @@ def install_package(
 # ── Verificação completa (roda em thread) ─────────────────────────────────────
 
 class UpdateChecker:
-    def __init__(self) -> None:
+    def __init__(self, current_version: Optional[str] = None) -> None:
         self._system = _detect_system()
+        # Versão embutida no app, usada como fallback quando o version.txt
+        # não existe (ex.: rodando do código-fonte, sem pacote instalado).
+        self._current_version = current_version
 
     @property
     def system(self) -> str:
@@ -286,18 +371,36 @@ class UpdateChecker:
         try:
             local = read_local_version()
             if local is None:
-                # Instalação de desenvolvimento sem version.txt: silencioso.
-                logger.info("version.txt não encontrado; verificação ignorada.")
-                return
+                # Sem version.txt (instalação de desenvolvimento): usa a versão
+                # embutida no app como fallback, em vez de abortar em silêncio.
+                local = self._current_version
+                if local is None:
+                    logger.warning(
+                        "version.txt não encontrado e nenhuma versão de app "
+                        "informada; verificação ignorada."
+                    )
+                    return
+                logger.info(
+                    "version.txt ausente; usando versão do app: %s", local
+                )
 
             release = fetch_latest_release()
             remote_tag = release.get("tag_name", "")
 
-            if not remote_tag:
-                logger.warning("GitHub não retornou tag_name.")
+            # Versão REAL do pacote (do nome do asset), que é o que o
+            # version.txt guarda. Cai para a tag só se não houver asset.
+            remote_version = self.remote_version(release) or remote_tag
+
+            if not remote_version:
+                logger.warning("GitHub não retornou versão utilizável.")
                 return
 
-            if is_newer(remote_tag, local):
+            logger.info(
+                "Comparando versões — local: %s | remota: %s (tag: %s)",
+                local, remote_version, remote_tag,
+            )
+
+            if is_newer(remote_version, local):
                 on_update_available(release, local)
             else:
                 if on_no_update:
@@ -307,6 +410,17 @@ class UpdateChecker:
             logger.warning("Verificação de update falhou: %s", exc)
             if on_error:
                 on_error(str(exc))
+
+    def remote_version(self, release: Dict[str, Any]) -> Optional[str]:
+        """Versão do asset correspondente ao sistema atual (= pkgver)."""
+        suffix = _asset_suffix(self._system)
+        for asset in release.get("assets") or []:
+            name = asset.get("name", "")
+            if name.endswith(suffix):
+                version = _version_from_asset_name(name)
+                if version:
+                    return version
+        return None
 
     def find_asset_url(self, release: Dict[str, Any]) -> Optional[str]:
         """Retorna a URL do asset correto para o sistema atual."""
