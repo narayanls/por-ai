@@ -53,8 +53,10 @@ DEFAULTS: Dict[str, Any] = {
     "system_prompt": DEFAULT_SYSTEM_PROMPT,
     "temperature": 1.0,
     "stream": True,
+    "show_tray_icon": False,
 }
 
+    
 
 class Config:
     """Lê e grava a configuração do app em disco."""
@@ -164,6 +166,10 @@ class Config:
     @property
     def stream(self) -> bool:
         return bool(self.get("stream", True))
+
+    @property
+    def show_tray_icon(self) -> bool:
+        return bool(self.get("show_tray_icon", False))
 
     def is_configured(self) -> bool:
         """True se há chave da API suficiente para usar o app."""

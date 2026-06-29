@@ -40,7 +40,7 @@ except Exception as _exc:  # pylint: disable=broad-except
 
 # Versão embutida do app — fonte única, usada na janela "Sobre" e como
 # fallback do verificador de updates quando o version.txt não existe.
-APP_VERSION = "0.1.9"
+APP_VERSION = "0.2.0"
 
 _CSS = b"""
 .message-bubble {
@@ -454,8 +454,11 @@ class PorAiWindow(Adw.ApplicationWindow):
         return False
 
     def _on_close_request(self, *_args) -> bool:
-        print("[DEBUG] close-request disparado", flush=True)
-        return False  # False = permite o fechamento padrão
+        app = self.get_application()
+        if app is not None and app.tray_active:
+            self.set_visible(False)
+            return True  # esconde na bandeja em vez de encerrar
+        return False  # comportamento normal: permite o fechamento
         
         
              
@@ -1136,6 +1139,8 @@ class PorAiWindow(Adw.ApplicationWindow):
         models = self.config.models
         self._model_list = list(models)
         self._select_model(current if current in models else self.config.default_model)
+        # Aplica imediatamente a mudança da preferência de bandeja.
+        self.get_application().apply_tray_setting()
 
     def _on_about(self, *_args) -> None:
         about = Adw.AboutWindow(
