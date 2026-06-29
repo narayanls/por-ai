@@ -118,6 +118,16 @@ class PreferencesWindow(Adw.PreferencesWindow):
         self._stream_row.set_active(self.config.stream)
         group.add(self._stream_row)
 
+        self._tray_row = Adw.SwitchRow()
+        self._tray_row.set_title("Ícone na bandeja do sistema")
+        self._tray_row.set_subtitle(
+            "Mantém o app acessível pela área de notificação. "
+            "No GNOME, requer a extensão “AppIndicator and KStatusNotifierItem "
+            "Support”."
+        )
+        self._tray_row.set_active(self.config.show_tray_icon)
+        group.add(self._tray_row)
+
         # Temperatura via slider. Evita o Adw.SpinRow, cujos botões -/+ dependem
         # dos ícones simbólicos value-decrease/increase-symbolic, que podem estar
         # quebrados em alguns pacotes de ícones (ex.: Tela-circle).
@@ -189,6 +199,7 @@ class PreferencesWindow(Adw.PreferencesWindow):
         self.config.set("stream", self._stream_row.get_active())
         self.config.set("temperature", round(self._temperature_scale.get_value(), 2))
         self.config.set("system_prompt", self._buffer_text(self._prompt_view))
+        self.config.set("show_tray_icon", self._tray_row.get_active())
 
         models_text = self._buffer_text(self._models_view)
         models = [line.strip() for line in models_text.splitlines() if line.strip()]
