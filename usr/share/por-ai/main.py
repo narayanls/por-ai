@@ -24,11 +24,22 @@ from gi.repository import Adw, Gio, GLib
 from core.config import Config
 from ui.window import PorAiWindow
 
-# ATENÇÃO: troque "porai" pelo seu usuário/organização do GitHub se quiser.
-# Para o agrupamento correto no dock/menu (especialmente no Wayland), o ideal é
-# que o nome do arquivo .desktop combine com este ID, ou que o .desktop tenha
-# StartupWMClass igual a ele. Veja o README.
-APPLICATION_ID = "io.github.porai.PorAi"
+# Identifica o ambiente gráfico e o tipo de sessão
+current_desktop = os.environ.get('XDG_CURRENT_DESKTOP', '')
+session_type = os.environ.get('XDG_SESSION_TYPE', '').lower()
+
+# Fix for dead keys/accents in different Desktop Environments
+if current_desktop in ('Hyprland', 'niri'):
+    os.environ.setdefault('GTK_IM_MODULE', 'gtk-im-context-simple')
+elif current_desktop == 'KDE':
+    if session_type == 'wayland':
+        # KDE Plasma 6+ (Wayland default)
+        os.environ.setdefault('GTK_IM_MODULE', 'gtk-im-context-simple')
+    else:
+        # Legacy KDE Plasma (X11)
+        os.environ.setdefault('GTK_IM_MODULE', 'xim')
+
+APPLICATION_ID = "io.github.narayanls.PorAi"
 
 
 class PorAiApplication(Adw.Application):
