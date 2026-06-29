@@ -40,7 +40,7 @@ except Exception as _exc:  # pylint: disable=broad-except
 
 # Versão embutida do app — fonte única, usada na janela "Sobre" e como
 # fallback do verificador de updates quando o version.txt não existe.
-APP_VERSION = "0.1.7"
+APP_VERSION = "0.1.8"
 
 _CSS = b"""
 .message-bubble {
@@ -84,6 +84,7 @@ class PorAiWindow(Adw.ApplicationWindow):
         self._pending_attachments: List[str] = []
         # Bolha do assistente em construção durante o streaming.
         self._streaming_row: Optional[MessageRow] = None
+        self.connect("close-request", self._on_close_request)
 
         self.set_title("POR.ai")
         self.set_default_size(720, 720)
@@ -101,6 +102,14 @@ class PorAiWindow(Adw.ApplicationWindow):
 
         if not self.config.is_configured():
             GLib.idle_add(self._prompt_for_api_key)
+
+        _probe = Gtk.EventControllerKey()
+        _probe.set_propagation_phase(Gtk.PropagationPhase.CAPTURE)
+        _probe.connect("key-pressed", lambda _c, kv, _kc, _st: (
+            print(f"[DEBUG] tecla chegou ao toplevel: keyval={kv}", flush=True), False)[1])
+        self.add_controller(_probe)
+
+        
 
     # ------------------------------------------------------------------ #
     # Estilo e ações                                                       #
@@ -410,7 +419,11 @@ class PorAiWindow(Adw.ApplicationWindow):
         """Limpa a busca e foca o SearchEntry ao abrir."""
         self._model_search.set_text("")
         self._populate_model_listbox(self._model_list)
-        GLib.idle_add(self._model_search.grab_focus)
+        GLib.idle_add(self._focus_model_search)
+
+    def _focus_model_search(self) -> bool:
+        self._model_search.grab_focus()
+        return False
 
     def _on_model_search_changed(self, entry: Gtk.SearchEntry) -> None:
         query = entry.get_text().lower().strip()
@@ -427,7 +440,25 @@ class PorAiWindow(Adw.ApplicationWindow):
             self._model_button.set_label(self._short_model_label(model_id))
             self.config.default_model = model_id
             self.config.save()
-        self._model_popover.popdown()
+        # fecha pelo MenuButton
+        GLib.idle_add(self._dismiss_model_popover)
+
+    def _dismiss_model_popover(self) -> bool:
+        self._model_button.popdown()
+        print("[DEBUG] após popdown -> popover visível:",
+            self._model_popover.get_visible(),
+            "| menubutton active:", self._model_button.get_active(),
+            "| foco janela:", self.get_focus(), flush=True)
+        self._input_view.grab_focus()
+        print("[DEBUG] foco após grab:", self.get_focus(), flush=True)
+        return False
+
+    def _on_close_request(self, *_args) -> bool:
+        print("[DEBUG] close-request disparado", flush=True)
+        return False  # False = permite o fechamento padrão
+        
+        
+             
 
     @staticmethod
     def _short_model_label(model_id: Optional[str]) -> str:
