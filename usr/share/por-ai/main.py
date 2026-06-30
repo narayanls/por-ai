@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-POR.ai — Private OpenRouter AI.
+POR.ai — Personal Own Router AI.
 
 """
 
