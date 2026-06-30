@@ -52,6 +52,7 @@ DEFAULTS: Dict[str, Any] = {
     "site_name": "POR.ai",
     "system_prompt": DEFAULT_SYSTEM_PROMPT,
     "temperature": 1.0,
+    "max_tokens": 8192,
     "stream": True,
     "show_tray_icon": False,
 }
@@ -162,6 +163,27 @@ class Config:
             return float(self.get("temperature", 1.0))
         except (TypeError, ValueError):
             return 1.0
+
+    @property
+    def max_tokens(self) -> Optional[int]:
+        value = self.get("max_tokens", 8192)
+        if value in (None, "", 0):
+            return None
+        try:
+            parsed = int(value)
+        except (TypeError, ValueError):
+            return 8192
+        return parsed if parsed > 0 else None
+ 
+    @max_tokens.setter
+    def max_tokens(self, value: Any) -> None:
+        if value in (None, "", 0):
+            self.set("max_tokens", None)
+            return
+        try:
+            self.set("max_tokens", int(value))
+        except (TypeError, ValueError):
+            self.set("max_tokens", 8192)
 
     @property
     def stream(self) -> bool:
