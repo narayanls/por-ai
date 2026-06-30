@@ -6,7 +6,7 @@
 
 **Personal Own Router AI**
 
-Chat com modelos de IA via [OpenRouter](https://openrouter.ai), rodando localmente no seu Linux.  
+Chat com modelos de IA via [OpenRouter](https://openrouter.ai), rodando localmente no seu Linux e usando a velocidade e potência dos servidores dos modelos.  
 Construído com Python + GTK4/Adwaita.
 
 [![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](https://www.gnu.org/licenses/gpl-3.0)
