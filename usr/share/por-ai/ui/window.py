@@ -40,7 +40,7 @@ except Exception as _exc:  # pylint: disable=broad-except
 
 # Versão embutida do app — fonte única, usada na janela "Sobre" e como
 # fallback do verificador de updates quando o version.txt não existe.
-APP_VERSION = "0.2.0"
+APP_VERSION = "0.1.7.2"
 
 _CSS = b"""
 .message-bubble {
@@ -1150,7 +1150,7 @@ class PorAiWindow(Adw.ApplicationWindow):
             version=APP_VERSION,
             developer_name="Narayan L. Silva - feito com Claude Sonnet",
             comments=(
-                "Private OpenRouter AI — um chat com modelos do OpenRouter, "
+                "Personal Own Router AI — um chat com modelos do OpenRouter, "
                 "rodando localmente para manter o controle dos seus arquivos."
             ),
             license_type=Gtk.License.GPL_3_0,
