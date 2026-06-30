@@ -119,12 +119,14 @@ class ChatAssistant:
                     on_delta=lambda text: GLib.idle_add(on_delta, text),
                     should_cancel=self._cancel.is_set,
                     temperature=self.config.temperature,
+                    max_tokens=self.config.max_tokens,
                 )
             else:
                 full = client.chat(
                     model=model,
                     messages=messages,
                     temperature=self.config.temperature,
+                    max_tokens=self.config.max_tokens,
                 )
                 GLib.idle_add(on_delta, full)
             GLib.idle_add(on_done, full)

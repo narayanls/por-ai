@@ -15,9 +15,10 @@ import gi
 
 gi.require_version("Gtk", "4.0")
 gi.require_version("Adw", "1")
-from gi.repository import Adw, Gdk, Gio, GLib, Gtk
+gi.require_version("Pango", "1.0")
+from gi.repository import Adw, Gdk, Gio, GLib, Gtk, Pango
 
-from ui.markup import md_to_pango
+from ui.markup import escape_plain, md_to_pango
 
 
 class MessageRow(Gtk.Box):
@@ -113,17 +114,34 @@ class MessageRow(Gtk.Box):
     # ------------------------------------------------------------------ #
 
     def _set_markup(self, text: str) -> None:
-        """Converte Markdown → Pango markup e aplica no label com fallback."""
+        """Converte Markdown → Pango markup e aplica no label com fallback.
+
+        ``Gtk.Label.set_markup()`` NÃO levanta exceção em Python quando o
+        markup é inválido — ele só registra um aviso (g_critical) e mantém
+        o conteúdo anterior do label, fazendo a UI "travar" silenciosamente
+        no meio do streaming mesmo com o texto completo acumulado em
+        ``self._text``. Por isso validamos o markup nós mesmos com
+        ``Pango.parse_markup`` (que sim levanta ``GLib.Error``) antes de
+        aplicar, e caímos para texto puro escapado em caso de falha — assim
+        o texto sempre continua aparecendo por inteiro, mesmo que sem
+        formatação em algum chunk intermediário.
+        """
         if not text:
             self._label.set_markup("")
             return
         markup = md_to_pango(text)
-        try:
+        if self._is_valid_markup(markup):
             self._label.set_markup(markup)
-        except Exception:
-            # Se o markup gerado for inválido (pode ocorrer no meio do
-            # streaming com tags incompletas), cai para texto puro.
-            self._label.set_text(text)
+        else:
+            self._label.set_markup(escape_plain(text))
+
+    @staticmethod
+    def _is_valid_markup(markup: str) -> bool:
+        try:
+            Pango.parse_markup(markup, -1, "\0")
+            return True
+        except GLib.Error:
+            return False
 
     @staticmethod
     def _on_link_activated(_label: Gtk.Label, uri: str) -> bool:

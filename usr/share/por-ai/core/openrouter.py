@@ -127,6 +127,9 @@ class OpenRouterClient:
             raise OpenRouterError("O provedor retornou uma resposta vazia.")
         message = choices[0].get("message") if isinstance(choices[0], dict) else None
         content = message.get("content") if isinstance(message, dict) else None
+        finish_reason = choices[0].get("finish_reason") if isinstance(choices[0], dict) else None
+        usage = data.get("usage") if isinstance(data.get("usage"), dict) else None
+        self._debug_log(model, finish_reason, usage)
         if not isinstance(content, str) or not content.strip():
             raise OpenRouterError("O provedor não retornou conteúdo utilizável.")
         return content.strip()
@@ -155,10 +158,13 @@ class OpenRouterClient:
             "model": model,
             "messages": self._normalise_messages(messages),
             "stream": True,
+            "stream_options": {"include_usage": True},
         }
         payload.update(self._clean_params(params))
 
         collected: List[str] = []
+        finish_reason: Optional[str] = None
+        usage: Optional[Dict[str, Any]] = None
         try:
             with requests.post(
                 url,
@@ -199,6 +205,12 @@ class OpenRouterClient:
                         chunk = json.loads(data_str)
                     except ValueError:
                         continue
+                    chunk_finish = self._extract_finish_reason(chunk)
+                    if chunk_finish:
+                        finish_reason = chunk_finish
+                    chunk_usage = chunk.get("usage")
+                    if isinstance(chunk_usage, dict):
+                        usage = chunk_usage
                     delta_text = self._extract_delta(chunk)
                     if delta_text:
                         collected.append(delta_text)
@@ -206,6 +218,7 @@ class OpenRouterClient:
         except requests.RequestException as exc:
             raise OpenRouterError(f"Falha ao contatar OpenRouter: {exc}") from exc
 
+        self._debug_log(model, finish_reason, usage)
         return "".join(collected)
 
     # ------------------------------------------------------------------ #
@@ -220,6 +233,46 @@ class OpenRouterClient:
         delta = choices[0].get("delta") or {}
         content = delta.get("content")
         return content if isinstance(content, str) else ""
+
+    @staticmethod
+    def _extract_finish_reason(chunk: Dict[str, Any]) -> Optional[str]:
+        choices = chunk.get("choices") or []
+        if not choices or not isinstance(choices[0], dict):
+            return None
+        reason = choices[0].get("finish_reason")
+        return reason if isinstance(reason, str) else None
+
+    @staticmethod
+    def _debug_log(
+        model: str,
+        finish_reason: Optional[str],
+        usage: Optional[Dict[str, Any]],
+    ) -> None:
+        """Imprime no terminal o motivo de término e o uso de tokens.
+
+        Útil para diagnosticar respostas cortadas: se ``finish_reason`` vier
+        como "length", a resposta foi truncada por atingir o limite de
+        tokens (``max_tokens``) configurado em Preferências.
+        """
+        usage_str = "indisponível"
+        if isinstance(usage, dict):
+            prompt = usage.get("prompt_tokens", "?")
+            completion = usage.get("completion_tokens", "?")
+            total = usage.get("total_tokens", "?")
+            usage_str = f"prompt={prompt} completion={completion} total={total}"
+            reasoning_tokens = None
+            details = usage.get("completion_tokens_details")
+            if isinstance(details, dict):
+                reasoning_tokens = details.get("reasoning_tokens")
+            if reasoning_tokens is not None:
+                usage_str += f" reasoning={reasoning_tokens}"
+
+        reason_str = finish_reason or "desconhecido"
+        flag = " ⚠️ TRUNCADA (limite de tokens atingido)" if finish_reason == "length" else ""
+        print(
+            f"[por-ai][debug] modelo={model} finish_reason={reason_str} "
+            f"tokens=({usage_str}){flag}"
+        )
 
     @staticmethod
     def _normalise_messages(

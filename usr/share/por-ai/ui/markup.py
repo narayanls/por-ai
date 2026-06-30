@@ -42,7 +42,7 @@ _RE_BOLD = re.compile(r"\*\*(.+?)\*\*|__(.+?)__", re.DOTALL)
 _RE_ITALIC = re.compile(r"\*(.+?)\*|_(.+?)_", re.DOTALL)
 
 # Código inline: `código`
-_RE_CODE_INLINE = re.compile(r"`([^`]+)`")
+_RE_CODE_INLINE = re.compile(r"`([^`\n]+)`")
 
 # Links Markdown: [texto](url)
 _RE_LINK = re.compile(r"\[([^\]]+)\]\((https?://[^\)]+)\)")
@@ -66,6 +66,7 @@ _RE_HR = re.compile(r"^(\-{3,}|\*{3,})$", re.MULTILINE)
 # de ser modificado pelas regras de inline (negrito, itálico etc.).
 
 _PLACEHOLDER_PREFIX = "\x00CODE\x00"
+_PLACEHOLDER_INLINE_PREFIX = "\x00ICODE\x00"
 
 
 def md_to_pango(text: str) -> str:
@@ -90,6 +91,21 @@ def md_to_pango(text: str) -> str:
 
     text = _RE_CODE_BLOCK.sub(_save_code_block, text)
 
+    # 1b) Extrai código inline (`código`) e protege do mesmo jeito. Isso
+    # evita que `*`, `_` dentro de nomes/expressões de código (ex.:
+    # wrap_text, __init__, 2**32) sejam interpretados como negrito/itálico
+    # e gerem tags Pango aninhadas de forma inválida (markup quebrado).
+    inline_codes: list[str] = []
+
+    def _save_inline_code(match: re.Match) -> str:
+        content = match.group(1)
+        escaped = _escape(content)
+        markup = f"<tt>{escaped}</tt>"
+        inline_codes.append(markup)
+        return f"{_PLACEHOLDER_INLINE_PREFIX}{len(inline_codes) - 1}\x00"
+
+    text = _RE_CODE_INLINE.sub(_save_inline_code, text)
+
     # 2) Escapa os caracteres especiais do XML no texto restante.
     text = _escape(text)
 
@@ -108,8 +124,7 @@ def md_to_pango(text: str) -> str:
         lambda m: f"<i>{m.group(1) or m.group(2)}</i>", text
     )
 
-    # 6) Código inline.
-    text = _RE_CODE_INLINE.sub(lambda m: f"<tt>{m.group(1)}</tt>", text)
+    # 6) (código inline já foi extraído e protegido no passo 1b)
 
     # 7) Links Markdown [texto](url) — url já foi escapada em step 2.
     text = _RE_LINK.sub(
@@ -131,7 +146,22 @@ def md_to_pango(text: str) -> str:
     for i, block in enumerate(code_blocks):
         text = text.replace(f"{_PLACEHOLDER_PREFIX}{i}\x00", block)
 
+    # 12) Restaura os trechos de código inline.
+    for i, block in enumerate(inline_codes):
+        text = text.replace(f"{_PLACEHOLDER_INLINE_PREFIX}{i}\x00", block)
+
     return text
+
+
+def escape_plain(text: str) -> str:
+    """Escapa texto puro para uso seguro como Pango markup (sem formatação).
+
+    Usado como rede de segurança quando ``md_to_pango`` produz markup
+    inválido (ex.: tags que ficam desbalanceadas momentaneamente durante o
+    streaming) — garante que o texto continue aparecendo por inteiro, só
+    que sem negrito/itálico/código, em vez do label travar sem atualizar.
+    """
+    return _escape(text)
 
 
 def _escape(text: str) -> str:
