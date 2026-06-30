@@ -4,7 +4,7 @@
 
 # POR.ai
 
-**Private OpenRouter AI**
+**Personal Own Router AI**
 
 Chat com modelos de IA via [OpenRouter](https://openrouter.ai), rodando localmente no seu Linux.  
 Construído com Python + GTK4/Adwaita.
@@ -34,7 +34,6 @@ Você precisa criar uma chave de API no site do OpenRouter para usar este aplica
 - **Multimodal** — envie imagens (PNG, JPG, WebP) como entrada para modelos
   compatíveis analisarem (GPT-4o, Claude, Gemini…)
 - **Links clicáveis** — URLs nas respostas são renderizadas como links, incluindo imagens geradas.
-- **Privacidade local** — sem telemetria, sem servidor próprio; suas conversas ficam só na sua máquina
 - **Interface nativa** — GTK4 + Adwaita, integrada ao tema do sistema (modo escuro/claro automático)
 
 ---
@@ -88,7 +87,7 @@ python3 usr/share/por-ai/main.py
 
 ## 🔒 Sobre privacidade
 
-O POR.ai roda inteiramente no seu computador — sem telemetria, sem servidor intermediário próprio. As conversas são salvas localmente em `~/.local/share/por-ai/` e a chave da API fica em `~/.config/por-ai/config.json` (permissão `0600`).
+O POR.ai roda no seu computador, mas depende da conexão com a internet — sem telemetria, sem servidor intermediário próprio. As conversas são salvas localmente em `~/.local/share/por-ai/` e a chave da API fica em `~/.config/por-ai/config.json` (permissão `0600`).
 
 O conteúdo das mensagens e arquivos anexados é enviado ao **OpenRouter**, que os encaminha ao provedor do modelo escolhido. Nas configurações da sua conta OpenRouter você pode restringir provedores que treinam com dados dos usuários.
 
