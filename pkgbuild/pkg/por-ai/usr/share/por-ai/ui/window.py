@@ -40,7 +40,7 @@ except Exception as _exc:  # pylint: disable=broad-except
 
 # Versão embutida do app — fonte única, usada na janela "Sobre" e como
 # fallback do verificador de updates quando o version.txt não existe.
-APP_VERSION = "0.1.7.2"
+APP_VERSION = "0.1.7.3"
 
 _CSS = b"""
 .message-bubble {
@@ -105,20 +105,8 @@ class PorAiWindow(Adw.ApplicationWindow):
 
         _probe = Gtk.EventControllerKey()
         _probe.set_propagation_phase(Gtk.PropagationPhase.CAPTURE)
-
-        def _debug_key_probe(_c, kv, _kc, _st):
-            focus = self.get_focus()
-            focus_desc = f"{type(focus).__name__}@{id(focus):x}" if focus else "None"
-            is_search = focus is getattr(self, "_model_search", None)
-            print(
-                f"[DEBUG][{time.monotonic():.3f}] tecla chegou ao toplevel: "
-                f"keyval={kv} | foco_atual={focus_desc} | "
-                f"eh_campo_busca={is_search}",
-                flush=True,
-            )
-            return False
-
-        _probe.connect("key-pressed", _debug_key_probe)
+        _probe.connect("key-pressed", lambda _c, kv, _kc, _st: (
+            print(f"[DEBUG] tecla chegou ao toplevel: keyval={kv}", flush=True), False)[1])
         self.add_controller(_probe)
 
         
@@ -225,13 +213,6 @@ class PorAiWindow(Adw.ApplicationWindow):
         self._model_button.set_label(self._short_model_label(self._selected_model_id))
         self._model_popover = self._build_model_popover()
         self._model_button.set_popover(self._model_popover)
-        self._model_button.connect(
-            "notify::active",
-            lambda btn, _p: print(
-                f"[DEBUG][{time.monotonic():.3f}] model_button active={btn.get_active()}",
-                flush=True,
-            ),
-        )
         header.set_title_widget(self._model_button)
 
         # Botão "nova conversa".
@@ -359,9 +340,6 @@ class PorAiWindow(Adw.ApplicationWindow):
     # Placeholder / boas-vindas                                            #
     # ------------------------------------------------------------------ #
 
-    # ------------------------------------------------------------------ #
-    # Placeholder / boas-vindas                                            #
-    # ------------------------------------------------------------------ #
     def _show_placeholder(self) -> None:
         status = Adw.StatusPage()
         status.set_icon_name("user-available-symbolic")
@@ -371,34 +349,6 @@ class PorAiWindow(Adw.ApplicationWindow):
             "Digite uma mensagem ou anexe um arquivo para análise."
         )
         status.set_vexpand(True)
-
-        # --- Aviso sobre modelos pagos/gratuitos --- #
-        warning_box = Gtk.Box(
-            orientation=Gtk.Orientation.HORIZONTAL,
-            spacing=8,
-            halign=Gtk.Align.CENTER,
-        )
-        warning_box.add_css_class("warning")
-
-        warning_icon = Gtk.Image.new_from_icon_name("dialog-warning-symbolic")
-        warning_icon.set_pixel_size(16)
-
-        warning_label = Gtk.Label(
-            label=(
-                "Note que há modelos pagos e gratuitos. Através do site do "
-                "OpenRouter você pode adicionar saldo ou pesquisar por "
-                "modelos que não geram custos."
-            )
-        )
-        warning_label.set_wrap(True)
-        warning_label.set_justify(Gtk.Justification.CENTER)
-        warning_label.set_max_width_chars(50)
-
-        warning_box.append(warning_icon)
-        warning_box.append(warning_label)
-
-        status.set_child(warning_box)
-
         self._placeholder = status
         self._messages_box.append(status)
 
@@ -414,7 +364,7 @@ class PorAiWindow(Adw.ApplicationWindow):
     def _build_model_popover(self) -> Gtk.Popover:
         popover = Gtk.Popover()
         popover.set_size_request(320, -1)
-        popover.connect("map", self._on_model_popover_show)
+        popover.connect("show", self._on_model_popover_show)
 
         box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=0)
         box.set_margin_top(6)
@@ -466,39 +416,13 @@ class PorAiWindow(Adw.ApplicationWindow):
             self._model_listbox.insert(row, -1)
 
     def _on_model_popover_show(self, _popover) -> None:
-        """Limpa a busca e foca o SearchEntry ao abrir.
-
-        Usa o sinal "map" (não "show") porque "show" dispara antes do
-        popover estar de fato alocado/pronto na tela — chamar grab_focus()
-        nesse momento pode não ter efeito, especialmente logo após um reset
-        pesado da UI (ex.: "Nova conversa"), que atrasa o mapeamento do
-        popover e cria uma corrida com o grab_focus do campo de mensagem.
-        """
+        """Limpa a busca e foca o SearchEntry ao abrir."""
         self._model_search.set_text("")
         self._populate_model_listbox(self._model_list)
-        print(
-            f"[DEBUG][{time.monotonic():.3f}] popover 'map' disparado | "
-            f"popover.get_mapped()={_popover.get_mapped()} | "
-            f"search.get_mapped()={self._model_search.get_mapped()} | "
-            f"search.get_realized()={self._model_search.get_realized()}",
-            flush=True,
-        )
         GLib.idle_add(self._focus_model_search)
 
     def _focus_model_search(self) -> bool:
-        before = self.get_focus()
-        ok = self._model_search.grab_focus()
-        after = self.get_focus()
-        print(
-            f"[DEBUG][{time.monotonic():.3f}] _focus_model_search idle: "
-            f"grab_focus_ok={ok} | "
-            f"search.get_mapped()={self._model_search.get_mapped()} | "
-            f"search.get_can_focus()={self._model_search.get_can_focus()} | "
-            f"foco_antes={type(before).__name__ if before else None} | "
-            f"foco_depois={type(after).__name__ if after else None} | "
-            f"foco_depois_eh_busca={after is self._model_search}",
-            flush=True,
-        )
+        self._model_search.grab_focus()
         return False
 
     def _on_model_search_changed(self, entry: Gtk.SearchEntry) -> None:
@@ -899,23 +823,9 @@ class PorAiWindow(Adw.ApplicationWindow):
         self._placeholder = None
         self._show_placeholder()
         self._set_busy(False)
-
-        def _debug_reset_focus_grab() -> bool:
-            before = self.get_focus()
-            ok = self._input_view.grab_focus()
-            after = self.get_focus()
-            print(
-                f"[DEBUG][{time.monotonic():.3f}] _reset_chat_view idle grab_focus: "
-                f"ok={ok} | foco_antes={type(before).__name__ if before else None} | "
-                f"foco_depois={type(after).__name__ if after else None}",
-                flush=True,
-            )
-            return False
-
-        GLib.idle_add(_debug_reset_focus_grab)
+        GLib.idle_add(self._input_view.grab_focus)
 
     def _on_new_chat(self, *_args) -> None:
-        print(f"[DEBUG][{time.monotonic():.3f}] === Nova conversa clicada ===", flush=True)
         # A conversa anterior já está salva (persistimos a cada turno), então
         # aqui só abrimos uma conversa nova e limpa.
         self._reset_chat_view()
@@ -1244,7 +1154,7 @@ class PorAiWindow(Adw.ApplicationWindow):
                 "rodando localmente para manter o controle dos seus arquivos."
             ),
             license_type=Gtk.License.GPL_3_0,
-            website="https://github.com/narayanls/por-ai",
+            website="https://openrouter.ai",
         )
         about.present()
 
