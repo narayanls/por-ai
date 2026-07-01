@@ -62,11 +62,9 @@ class MessageRow(Gtk.Box):
         self._label.set_max_width_chars(80)
 
         if self._is_assistant:
-            # Links precisam de set_selectable(False) para abrir no primeiro
-            # clique: com selectable=True o label captura o evento para seleção
-            # de texto antes de activate-link ser emitido, causando scroll da
-            # página. O botão de copiar já garante acesso ao texto completo.
-            self._label.set_selectable(False)
+            self._label.set_selectable(True)
+            self._label.set_focus_on_click(False)
+            self._label.set_can_focus(False)
             self._label.set_use_markup(True)
             self._label.connect("activate-link", self._on_link_activated)
             self._set_markup(text)

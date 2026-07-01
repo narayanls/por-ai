@@ -533,7 +533,7 @@ class PorAiWindow(Adw.ApplicationWindow):
         app = self.get_application()
         if app is not None and app.tray_active:
             self.set_visible(False)
-            return True  # esconde na bandeja em vez de encerrar
+           # return True  # esconde na bandeja em vez de encerrar
         return False  # comportamento normal: permite o fechamento
         
         
