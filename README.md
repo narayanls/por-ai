@@ -22,7 +22,7 @@ Construído com Python + GTK4/Adwaita.
 Fiz este aplicativo para uso pessoal com auxílio de IA. Porém, como acredito que todo conhecimento é mais interessante quando compartilhado, decidi criar o repositório no Github sob licença GPL-3.0. Sendo assim, fique a vontade para reescrever todo o código sem auxílio de IA, se preferir, ou adicionar qualquer outra função que lhe seja útil.
 
 ## Não se esqueça
-Você precisa criar uma chave de API no site do OpenRouter para usar este aplicativo. Acesse o site clicando [aqui.](https://openrouter.ai) Existem modelos PAGOS e gratuitos, a maior parte é pago. Adicione saldo no site do OpenRouter ou pesquise por modelos grátis.
+Você precisa criar uma chave de API no site do OpenRouter para usar este aplicativo. Acesse o site clicando [aqui.](https://openrouter.ai) Existem **modelos PAGOS** e gratuitos, a maior parte é pago. Adicione saldo no site do OpenRouter ou pesquise por modelos grátis.
 
 ## ✨ Funcionalidades
 
