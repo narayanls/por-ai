@@ -59,6 +59,13 @@ class PorAiApplication(Adw.Application):
         self.config = Config()
         self._window: PorAiWindow | None = None
         self._tray: TrayIcon | None = None
+        # Rastreia se hold() está ativo, já que apply_tray_setting() chama
+        # hold() de forma otimista, antes de saber se o registro assíncrono
+        # da bandeja no D-Bus (ver tray.py) realmente vai dar certo. Sem essa
+        # flag, um hold()/release() desbalanceado no caminho de erro
+        # (_on_tray_unavailable) prendia o app vivo mesmo sem bandeja
+        # nenhuma funcionando.
+        self._tray_held = False
 
     def do_startup(self) -> None:
         Adw.Application.do_startup(self)
@@ -123,14 +130,20 @@ class PorAiApplication(Adw.Application):
                 debug=True,
             )
             self._tray.register()
-            # Mantém o processo vivo mesmo com a janela oculta.
-            self.hold()
+            # Mantém o processo vivo mesmo com a janela oculta. Chamado de
+            # forma otimista aqui — se o registro assíncrono falhar depois,
+            # _on_tray_unavailable desfaz isso.
+            if not self._tray_held:
+                self.hold()
+                self._tray_held = True
 
         elif not want and self._tray is not None:
             print("[tray] -> entrando no ramo de REMOCAO da bandeja", flush=True)
             self._tray.unregister()
             self._tray = None
-            self.release()
+            if self._tray_held:
+                self.release()
+                self._tray_held = False
             # Sem bandeja, se a janela estiver oculta, o app ficaria invisível
             # e sem como reaparecer — então a trazemos de volta.
             if self._window is not None and not self._window.get_visible():
@@ -156,6 +169,20 @@ class PorAiApplication(Adw.Application):
             "barramento. No GNOME, instale a extensão 'AppIndicator and "
             "KStatusNotifierItem Support' para ver o ícone."
         )
+        # apply_tray_setting() já tinha assumido sucesso (self._tray setado,
+        # hold() chamado) antes desta confirmação assíncrona chegar. Como o
+        # registro de fato falhou, não existe ícone nenhum — desfazemos esse
+        # estado para o app não ficar "preso" vivo por um hold() órfão.
+        if self._tray is not None:
+            self._tray.unregister()
+            self._tray = None
+        if self._tray_held:
+            self.release()
+            self._tray_held = False
+        # Sem bandeja de verdade, se a janela estiver oculta ela ficaria
+        # inacessível — traz de volta, igual ao ramo de remoção manual.
+        if self._window is not None and not self._window.get_visible():
+            self._window.present()
 
 
 def main() -> int:
