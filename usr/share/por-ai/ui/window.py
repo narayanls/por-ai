@@ -1105,7 +1105,12 @@ class PorAiWindow(Adw.ApplicationWindow):
 
         self._set_busy(False)
         self._scroll_to_bottom()
-        GLib.idle_add(self._input_view.grab_focus)
+        # NÃO passar self._input_view.grab_focus direto: ele retorna bool
+        # (True em caso de sucesso), e o GLib.idle_add reagenda pra sempre
+        # qualquer callback que retorne True — isso vira um idle infinito
+        # rodando enquanto a janela existir. Envolvemos para sempre
+        # devolver False (roda uma vez só).
+        GLib.idle_add(lambda: self._input_view.grab_focus() and False)
 
     def _on_delete_conv(self, conv_id: str) -> None:
         print(f"[DEBUG] _on_delete_conv chamado: conv_id={conv_id!r}", flush=True)

@@ -218,23 +218,55 @@ class ChatAssistant:
     # Alias para compatibilidade com código existente.
     read_attachment = read_text_attachment
 
+    # Assinaturas (magic numbers) dos formatos de imagem suportados. A
+    # extensão do arquivo (.jpg, .png etc.) é só um nome escolhido pelo
+    # usuário — nada garante que os bytes reais batem com ela. É comum uma
+    # captura de tela sair como PNG e depois ser renomeada para .jpg (ou
+    # vice-versa). Se a data URI declarar um MIME que não bate com os bytes
+    # de fato, o provedor tenta decodificar no formato errado, falha e em
+    # vez de dar erro claro alguns pipelines simplesmente repassam o blob
+    # bruto ao modelo como texto — que aí "vê" só ruído/caracteres
+    # repetidos. Por isso sempre inspecionamos os bytes primeiro.
+    _MAGIC_SIGNATURES = (
+        (b"\x89PNG\r\n\x1a\n", "image/png"),
+        (b"\xff\xd8\xff", "image/jpeg"),
+        (b"GIF87a", "image/gif"),
+        (b"GIF89a", "image/gif"),
+    )
+
+    @staticmethod
+    def _sniff_mime(data: bytes, fallback: str) -> str:
+        for signature, mime in ChatAssistant._MAGIC_SIGNATURES:
+            if data.startswith(signature):
+                return mime
+        # WEBP: RIFF....WEBP — os 4 primeiros bytes são "RIFF", só nos
+        # bytes 8-12 é que aparece o marcador "WEBP" de fato.
+        if data[:4] == b"RIFF" and data[8:12] == b"WEBP":
+            return "image/webp"
+        # Formato não reconhecido pela assinatura: cai para o palpite feito
+        # pela extensão do arquivo, em vez de travar o envio.
+        return fallback
+
     @staticmethod
     def read_image_attachment(path: str) -> Dict[str, Any]:
         """
         Lê uma imagem e devolve o bloco multimodal para a API:
         {"type": "image_url", "image_url": {"url": "data:<mime>;base64,..."}}
         """
-        mime, _ = mimetypes.guess_type(path)
-        if not mime:
+        guessed, _ = mimetypes.guess_type(path)
+        if not guessed:
             ext = os.path.splitext(path)[1].lower().lstrip(".")
             # jpg → jpeg para compatibilidade com o padrão MIME
             ext = "jpeg" if ext == "jpg" else ext
-            mime = f"image/{ext}"
+            guessed = f"image/{ext}"
         try:
             with open(path, "rb") as f:
-                data = base64.b64encode(f.read()).decode("ascii")
+                raw = f.read()
         except OSError as exc:
             raise RuntimeError(f"Erro ao ler imagem: {exc}") from exc
+        # A extensão é só um palpite; os bytes reais mandam.
+        mime = ChatAssistant._sniff_mime(raw, guessed)
+        data = base64.b64encode(raw).decode("ascii")
         return {
             "type": "image_url",
             "image_url": {"url": f"data:{mime};base64,{data}"},

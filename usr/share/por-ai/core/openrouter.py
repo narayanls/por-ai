@@ -282,7 +282,16 @@ class OpenRouterClient:
         normalised: List[Dict[str, str]] = []
         for message in messages:
             content = message.get("content", "")
-            if not isinstance(content, str) or not content:
+            if isinstance(content, list):
+                # Mensagem multimodal (texto + imagem): cada item já vem
+                # pronto de assistant.py (blocos {"type": "text", ...} ou
+                # {"type": "image_url", ...}). Só descartamos se a lista
+                # vier vazia — o formato em si é válido para a API.
+                if not content:
+                    continue
+            elif not isinstance(content, str) or not content:
+                # Mensagem de texto puro: descarta se vazia ou de tipo
+                # inesperado (nem str, nem list).
                 continue
             role = message.get("role")
             if role not in valid_roles:
