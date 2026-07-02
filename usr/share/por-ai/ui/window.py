@@ -40,7 +40,7 @@ except Exception as _exc:  # pylint: disable=broad-except
 
 # Versão embutida do app — fonte única, usada na janela "Sobre" e como
 # fallback do verificador de updates quando o version.txt não existe.
-APP_VERSION = "0.1.7.4"
+APP_VERSION = "0.1.7.5"
 
 _CSS = b"""
 .message-bubble {
