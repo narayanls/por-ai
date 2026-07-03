@@ -45,7 +45,8 @@ _RE_ITALIC = re.compile(r"\*(.+?)\*|_(.+?)_", re.DOTALL)
 _RE_CODE_INLINE = re.compile(r"`([^`\n]+)`")
 
 # Links Markdown: [texto](url)
-_RE_LINK = re.compile(r"\[([^\]]+)\]\((https?://[^\)]+)\)")
+# imagens geradas, salvas localmente pelo assistant.py).
+_RE_LINK = re.compile(r"\[([^\]]+)\]\(((?:https?|file)://[^\)]+)\)")
 
 # URLs nuas: http:// ou https:// não precedidas de href=" ou de (
 _RE_URL_BARE = re.compile(
