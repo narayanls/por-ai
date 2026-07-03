@@ -33,7 +33,7 @@ Você precisa criar uma chave de API no site do OpenRouter para usar este aplica
 - **Anexos** — até 4 arquivos por mensagem: PDF, ODT, TXT, MD e imagens (PNG, JPG, WebP)
 - **Multimodal** — envie imagens (PNG, JPG, WebP) como entrada para modelos
   compatíveis analisarem (GPT-4o, Claude, Gemini…)
-- **Links clicáveis** — URLs nas respostas são renderizadas como links, incluindo imagens geradas.
+- **Links clicáveis** — URLs nas respostas são renderizadas como links, incluindo imagens geradas. As imagens ficam salvas em /home/user/.local/share/por-ai/images
 - **Interface nativa** — GTK4 + Adwaita, integrada ao tema do sistema (modo escuro/claro automático)
 
 ---
