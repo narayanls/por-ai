@@ -14,7 +14,9 @@ import base64
 import logging
 import mimetypes
 import os
+import re
 import threading
+import uuid
 from typing import Any, Callable, Dict, List, Optional
 
 from gi.repository import GLib
@@ -113,7 +115,7 @@ class ChatAssistant:
         try:
             client = self._build_client()
             if self.config.stream:
-                full = client.stream_chat(
+                full, images = client.stream_chat(
                     model=model,
                     messages=messages,
                     on_delta=lambda text: GLib.idle_add(on_delta, text),
@@ -122,13 +124,21 @@ class ChatAssistant:
                     max_tokens=self.config.max_tokens,
                 )
             else:
-                full = client.chat(
+                full, images = client.chat(
                     model=model,
                     messages=messages,
                     temperature=self.config.temperature,
                     max_tokens=self.config.max_tokens,
                 )
                 GLib.idle_add(on_delta, full)
+
+            if images:
+                markdown_links = self._save_generated_images(images)
+                if markdown_links:
+                    extra = ("\n\n" if full.strip() else "") + markdown_links
+                    full += extra
+                    GLib.idle_add(on_delta, extra)
+
             GLib.idle_add(on_done, full)
         except OpenRouterError as exc:
             GLib.idle_add(on_error, str(exc))
@@ -271,6 +281,47 @@ class ChatAssistant:
             "type": "image_url",
             "image_url": {"url": f"data:{mime};base64,{data}"},
         }
+
+    _RE_DATA_URI = re.compile(r"^data:([^;]+);base64,(.+)$", re.DOTALL)
+
+    @staticmethod
+    def _save_generated_images(image_urls: List[str]) -> str:
+        """Salva imagens geradas pelo modelo (data URIs base64) em disco e
+        devolve um bloco Markdown com links clicáveis para cada uma."""
+        if not image_urls:
+            return ""
+        images_dir = os.path.join(GLib.get_user_data_dir(), "por-ai", "images")
+        try:
+            os.makedirs(images_dir, exist_ok=True)
+        except OSError:
+            return ""
+
+        links: List[str] = []
+        for url in image_urls:
+            if not isinstance(url, str):
+                continue
+            match = ChatAssistant._RE_DATA_URI.match(url)
+            if not match:
+                if url.startswith(("http://", "https://")):
+                    links.append(f"[Imagem gerada]({url})")
+                continue
+            mime, b64data = match.group(1), match.group(2)
+            ext = mimetypes.guess_extension(mime) or ".png"
+            if ext == ".jpe":
+                ext = ".jpg"
+            try:
+                raw = base64.b64decode(b64data)
+            except Exception:
+                continue
+            filename = f"{uuid.uuid4().hex}{ext}"
+            path = os.path.join(images_dir, filename)
+            try:
+                with open(path, "wb") as f:
+                    f.write(raw)
+            except OSError:
+                continue
+            links.append(f"[Imagem gerada]({GLib.filename_to_uri(path, None)})")
+        return "\n".join(links)
 
     # ------------------------------------------------------------------ #
     # Leitores específicos                                                 #

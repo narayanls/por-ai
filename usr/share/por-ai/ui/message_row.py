@@ -12,6 +12,7 @@ válida a cada atualização.
 from __future__ import annotations
 
 import gi
+import re
 
 gi.require_version("Gtk", "4.0")
 gi.require_version("Adw", "1")
@@ -133,10 +134,15 @@ class MessageRow(Gtk.Box):
         else:
             self._label.set_markup(escape_plain(text))
 
+    
+    # usa re para gerar link clicável de imagem
+    _RE_A_TAG = re.compile(r"</?a\b[^>]*>")
+
     @staticmethod
     def _is_valid_markup(markup: str) -> bool:
+        stripped = MessageRow._RE_A_TAG.sub("", markup)
         try:
-            Pango.parse_markup(markup, -1, "\0")
+            Pango.parse_markup(stripped, -1, "\0")
             return True
         except GLib.Error:
             return False

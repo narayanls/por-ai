@@ -18,7 +18,8 @@ from __future__ import annotations
 
 import json
 import logging
-from typing import Any, Callable, Dict, List, Optional
+from typing import Any, Callable, Dict, List, Optional, Tuple
+
 
 import requests
 
@@ -97,7 +98,7 @@ class OpenRouterClient:
         model: str,
         messages: List[Dict[str, str]],
         **params: Any,
-    ) -> str:
+    ) -> Tuple[str, List[str]]:
         url = f"{OPENROUTER_BASE}/chat/completions"
         payload: Dict[str, Any] = {
             "model": model,
@@ -127,12 +128,16 @@ class OpenRouterClient:
             raise OpenRouterError("O provedor retornou uma resposta vazia.")
         message = choices[0].get("message") if isinstance(choices[0], dict) else None
         content = message.get("content") if isinstance(message, dict) else None
+        image_urls = self._extract_images(
+            message.get("images") if isinstance(message, dict) else None
+        )
         finish_reason = choices[0].get("finish_reason") if isinstance(choices[0], dict) else None
         usage = data.get("usage") if isinstance(data.get("usage"), dict) else None
         self._debug_log(model, finish_reason, usage)
-        if not isinstance(content, str) or not content.strip():
+        text = content.strip() if isinstance(content, str) else ""
+        if not text and not image_urls:
             raise OpenRouterError("O provedor não retornou conteúdo utilizável.")
-        return content.strip()
+        return text, image_urls
 
     # ------------------------------------------------------------------ #
     # Completagem em streaming (SSE)                                       #
@@ -145,7 +150,7 @@ class OpenRouterClient:
         on_delta: Callable[[str], None],
         should_cancel: Optional[Callable[[], bool]] = None,
         **params: Any,
-    ) -> str:
+    ) -> Tuple[str, List[str]]:
         """
         Envia a conversa em modo streaming. Para cada pedaço de texto recebido,
         chama ``on_delta(texto)``. Retorna o texto completo acumulado.
@@ -163,6 +168,7 @@ class OpenRouterClient:
         payload.update(self._clean_params(params))
 
         collected: List[str] = []
+        collected_images: List[str] = []
         finish_reason: Optional[str] = None
         usage: Optional[Dict[str, Any]] = None
         try:
@@ -211,28 +217,49 @@ class OpenRouterClient:
                     chunk_usage = chunk.get("usage")
                     if isinstance(chunk_usage, dict):
                         usage = chunk_usage
-                    delta_text = self._extract_delta(chunk)
+                    delta_text, delta_images = self._extract_delta(chunk)
                     if delta_text:
                         collected.append(delta_text)
                         on_delta(delta_text)
+                    if delta_images:
+                        collected_images.extend(delta_images)
         except requests.RequestException as exc:
             raise OpenRouterError(f"Falha ao contatar OpenRouter: {exc}") from exc
 
         self._debug_log(model, finish_reason, usage)
-        return "".join(collected)
+        return "".join(collected), collected_images
 
     # ------------------------------------------------------------------ #
     # Auxiliares                                                           #
     # ------------------------------------------------------------------ #
 
     @staticmethod
-    def _extract_delta(chunk: Dict[str, Any]) -> str:
+    def _extract_images(images_field: Any) -> List[str]:
+        """Extrai as URLs (geralmente data URIs base64) do campo `images`
+        que modelos de geração de imagem devolvem ao lado de `content`."""
+        if not isinstance(images_field, list):
+            return []
+        urls: List[str] = []
+        for img in images_field:
+            if not isinstance(img, dict):
+                continue
+            image_url = img.get("image_url")
+            url = image_url.get("url") if isinstance(image_url, dict) else img.get("url")
+            if isinstance(url, str) and url:
+                urls.append(url)
+        return urls
+
+    
+    @staticmethod
+    def _extract_delta(chunk: Dict[str, Any]) -> Tuple[str, List[str]]:
         choices = chunk.get("choices") or []
         if not choices or not isinstance(choices[0], dict):
-            return ""
+            return "", []
         delta = choices[0].get("delta") or {}
         content = delta.get("content")
-        return content if isinstance(content, str) else ""
+        text = content if isinstance(content, str) else ""
+        images = OpenRouterClient._extract_images(delta.get("images"))
+        return text, images
 
     @staticmethod
     def _extract_finish_reason(chunk: Dict[str, Any]) -> Optional[str]:
