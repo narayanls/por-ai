@@ -52,7 +52,7 @@ DEFAULTS: Dict[str, Any] = {
     "site_name": "POR.ai",
     "system_prompt": DEFAULT_SYSTEM_PROMPT,
     "temperature": 1.0,
-    "max_tokens": 8192,
+    "max_tokens": 800192,
     "stream": True,
     "show_tray_icon": False,
 }

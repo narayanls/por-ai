@@ -61,6 +61,11 @@ _CSS = b"""
 .input-area {
     padding: 8px 12px 12px 12px;
 }
+.input-area.drop-target {
+    outline: 2px dashed @accent_bg_color;
+    outline-offset: -2px;
+    border-radius: 8px;
+}
 """
 
 
@@ -302,6 +307,14 @@ class PorAiWindow(Adw.ApplicationWindow):
     def _build_input_area(self) -> Gtk.Widget:
         outer = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=6)
         outer.add_css_class("input-area")
+        self._input_area_widget = outer
+
+        # Suporte a arrastar-e-soltar arquivos direto na área de entrada.
+        file_drop = Gtk.DropTarget.new(Gdk.FileList, Gdk.DragAction.COPY)
+        file_drop.connect("drop", self._on_files_dropped)
+        file_drop.connect("enter", self._on_drop_enter)
+        file_drop.connect("leave", self._on_drop_leave)
+        outer.add_controller(file_drop)
 
         # Barra de chips de anexo (FlowBox: quebra linha quando há vários).
         self._attachment_bar = Gtk.FlowBox()
@@ -331,6 +344,12 @@ class PorAiWindow(Adw.ApplicationWindow):
         self._input_view.set_bottom_margin(8)
         self._input_view.set_left_margin(8)
         self._input_view.set_right_margin(8)
+
+        text_file_drop = Gtk.DropTarget.new(Gdk.FileList, Gdk.DragAction.COPY)
+        text_file_drop.connect("drop", self._on_files_dropped)
+        text_file_drop.connect("enter", self._on_drop_enter)
+        text_file_drop.connect("leave", self._on_drop_leave)
+        self._input_view.add_controller(text_file_drop)
 
         key_controller = Gtk.EventControllerKey()
         key_controller.connect("key-pressed", self._on_input_key)
@@ -780,6 +799,27 @@ class PorAiWindow(Adw.ApplicationWindow):
 
     def _toast_unsupported(self, path: str) -> None:
         self._toast(self.assistant.unsupported_reason(path))
+
+
+    def _on_drop_enter(self, _drop_target, _x, _y) -> Gdk.DragAction:
+        self._input_area_widget.add_css_class("drop-target")
+        return Gdk.DragAction.COPY
+
+    def _on_drop_leave(self, _drop_target) -> None:
+        self._input_area_widget.remove_css_class("drop-target")
+
+    def _on_files_dropped(self, _drop_target, value: Gdk.FileList, _x, _y) -> bool:
+        self._input_area_widget.remove_css_class("drop-target")
+        files = value.get_files() if isinstance(value, Gdk.FileList) else []
+        if not files:
+            return False
+        for gfile in files:
+            path = gfile.get_path()
+            if path:
+                self.attach_file(path)
+            else:
+                self._toast("Só é possível anexar arquivos locais.")
+        return True
 
     def _on_attach(self, _button) -> None:
         # Não abre o seletor se já atingiu o limite.
@@ -1272,11 +1312,4 @@ class PorAiWindow(Adw.ApplicationWindow):
 
     # ------------------------------------------------------------------ #
     # Diversos                                                             #
-    # ------------------------------------------------------------------ #
-
-    def _prompt_for_api_key(self) -> bool:
-        self._toast("Bem-vindo! Defina sua chave da API em Preferências.")
-        return False
-
-    def _toast(self, message: str) -> None:
-        self._toast_overlay.add_toast(Adw.Toast(title=message))
+    
