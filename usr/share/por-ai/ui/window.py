@@ -40,7 +40,7 @@ except Exception as _exc:  # pylint: disable=broad-except
 
 # Versão embutida do app — fonte única, usada na janela "Sobre" e como
 # fallback do verificador de updates quando o version.txt não existe.
-APP_VERSION = "0.1.7.5"
+APP_VERSION = "0.1.7.7"
 
 _CSS = b"""
 .message-bubble {
@@ -84,7 +84,9 @@ class PorAiWindow(Adw.ApplicationWindow):
         self._pending_attachments: List[str] = []
         # Bolha do assistente em construção durante o streaming.
         self._streaming_row: Optional[MessageRow] = None
+        self._pending_usage: Optional[Dict[str, Any]] = None
         self.connect("close-request", self._on_close_request)
+
 
         self.set_title("POR.ai")
         self.set_default_size(720, 720)
@@ -677,10 +679,12 @@ class PorAiWindow(Adw.ApplicationWindow):
             on_delta=self._on_delta,
             on_done=self._on_done,
             on_error=self._on_error,
+            on_usage=self._on_usage,
         )
         if not started:
             self._set_busy(False)
             self._toast("Já existe uma resposta em andamento.")
+
 
     def _on_delta(self, chunk: str) -> bool:
         if self._streaming_row is not None:
@@ -688,15 +692,29 @@ class PorAiWindow(Adw.ApplicationWindow):
             self._scroll_to_bottom()
         return False  # GLib.idle_add: não repetir
 
+    def _on_usage(self, usage: Dict[str, Any]) -> bool:
+        print(f"[por-ai][debug] _on_usage recebeu: {usage!r} | streaming_row={self._streaming_row!r}")
+        self._pending_usage = usage
+        if self._streaming_row is not None:
+            self._streaming_row.set_usage(
+                usage.get("total_tokens"), usage.get("cost")
+            )
+        return False
+
     def _on_done(self, full_text: str) -> bool:
         if self._streaming_row is not None:
             if not full_text.strip():
                 self._streaming_row.set_text("(resposta vazia ou cancelada)")
-            self._messages.append(
-                {"role": "assistant", "content": full_text, "display": full_text}
-            )
+            assistant_message: Dict[str, Any] = {
+                "role": "assistant", "content": full_text, "display": full_text,
+            }
+            if self._pending_usage:
+                assistant_message["tokens"] = self._pending_usage.get("total_tokens")
+                assistant_message["cost"] = self._pending_usage.get("cost")
+            self._messages.append(assistant_message)
             self._persist()
         self._streaming_row = None
+        self._pending_usage = None
         self._set_busy(False)
         self._scroll_to_bottom()
         return False
@@ -1079,6 +1097,8 @@ class PorAiWindow(Adw.ApplicationWindow):
                 "role": m.get("role", "user"),
                 "content": m.get("content", ""),
                 "display": m.get("display", m.get("content", "")),
+                "tokens": m.get("tokens"),
+                "cost": m.get("cost"),
             }
             for m in data.get("messages", [])
             if isinstance(m, dict)
@@ -1101,15 +1121,12 @@ class PorAiWindow(Adw.ApplicationWindow):
         else:
             for message in self._messages:
                 row = MessageRow(message["role"], message["display"])
+                if message["role"] == "assistant":
+                    row.set_usage(message.get("tokens"), message.get("cost"))
                 self._messages_box.append(row)
 
         self._set_busy(False)
         self._scroll_to_bottom()
-        # NÃO passar self._input_view.grab_focus direto: ele retorna bool
-        # (True em caso de sucesso), e o GLib.idle_add reagenda pra sempre
-        # qualquer callback que retorne True — isso vira um idle infinito
-        # rodando enquanto a janela existir. Envolvemos para sempre
-        # devolver False (roda uma vez só).
         GLib.idle_add(lambda: self._input_view.grab_focus() and False)
 
     def _on_delete_conv(self, conv_id: str) -> None:

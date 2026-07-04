@@ -20,6 +20,7 @@ gi.require_version("Pango", "1.0")
 from gi.repository import Adw, Gdk, Gio, GLib, Gtk, Pango
 
 from ui.markup import escape_plain, md_to_pango
+from typing import Optional
 
 
 class MessageRow(Gtk.Box):
@@ -74,6 +75,17 @@ class MessageRow(Gtk.Box):
             self._label.set_text(text)
 
         bubble.append(self._label)
+
+        if self._is_assistant:
+            self._meta_label = Gtk.Label()
+            self._meta_label.add_css_class("caption")
+            self._meta_label.add_css_class("dim-label")
+            self._meta_label.set_halign(Gtk.Align.START)
+            self._meta_label.set_visible(False)
+            bubble.append(self._meta_label)
+        else:
+            self._meta_label = None
+
 
         if self._is_assistant:
             copy_button = Gtk.Button()
@@ -172,3 +184,27 @@ class MessageRow(Gtk.Box):
                 return False
 
             GLib.timeout_add_seconds(2, restore)
+
+    def set_usage(self, total_tokens: Optional[int] = None, cost: Optional[float] = None) -> None:
+        """Mostra tokens/custo em letra pequena no rodapé da bolha."""
+        if not self._is_assistant or self._meta_label is None:
+            return
+        parts: List[str] = []
+        if total_tokens is not None:
+            parts.append(f"{total_tokens} tokens")
+        if cost is not None:
+            parts.append(self._format_cost(cost))
+        if not parts:
+            return
+        self._meta_label.set_text(" · ".join(parts))
+        self._meta_label.set_visible(True)
+
+    @staticmethod
+    def _format_cost(cost: float) -> str:
+        if cost <= 0:
+            return "$0"
+        # mantém casas suficientes pra não virar "$0"
+        text = f"{cost:.6f}".rstrip("0").rstrip(".")
+        return f"${text}"
+
+

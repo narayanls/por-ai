@@ -98,11 +98,12 @@ class OpenRouterClient:
         model: str,
         messages: List[Dict[str, str]],
         **params: Any,
-    ) -> Tuple[str, List[str]]:
+    ) -> Tuple[str, List[str], Optional[Dict[str, Any]]]:
         url = f"{OPENROUTER_BASE}/chat/completions"
         payload: Dict[str, Any] = {
             "model": model,
             "messages": self._normalise_messages(messages),
+            "usage": {"include": True},
         }
         payload.update(self._clean_params(params))
 
@@ -137,7 +138,7 @@ class OpenRouterClient:
         text = content.strip() if isinstance(content, str) else ""
         if not text and not image_urls:
             raise OpenRouterError("O provedor não retornou conteúdo utilizável.")
-        return text, image_urls
+        return text, image_urls, usage
 
     # ------------------------------------------------------------------ #
     # Completagem em streaming (SSE)                                       #
@@ -150,7 +151,7 @@ class OpenRouterClient:
         on_delta: Callable[[str], None],
         should_cancel: Optional[Callable[[], bool]] = None,
         **params: Any,
-    ) -> Tuple[str, List[str]]:
+    ) -> Tuple[str, List[str], Optional[Dict[str, Any]]]:
         """
         Envia a conversa em modo streaming. Para cada pedaço de texto recebido,
         chama ``on_delta(texto)``. Retorna o texto completo acumulado.
@@ -164,6 +165,7 @@ class OpenRouterClient:
             "messages": self._normalise_messages(messages),
             "stream": True,
             "stream_options": {"include_usage": True},
+            "usage": {"include": True},
         }
         payload.update(self._clean_params(params))
 
@@ -227,7 +229,7 @@ class OpenRouterClient:
             raise OpenRouterError(f"Falha ao contatar OpenRouter: {exc}") from exc
 
         self._debug_log(model, finish_reason, usage)
-        return "".join(collected), collected_images
+        return "".join(collected), collected_images, usage
 
     # ------------------------------------------------------------------ #
     # Auxiliares                                                           #
@@ -283,6 +285,7 @@ class OpenRouterClient:
         """
         usage_str = "indisponível"
         if isinstance(usage, dict):
+            print(f"[por-ai][debug] usage bruto = {usage!r}")
             prompt = usage.get("prompt_tokens", "?")
             completion = usage.get("completion_tokens", "?")
             total = usage.get("total_tokens", "?")
