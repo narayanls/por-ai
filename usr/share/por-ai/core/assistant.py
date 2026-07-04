@@ -90,6 +90,7 @@ class ChatAssistant:
         on_delta: Callable[[str], None],
         on_done: Callable[[str], None],
         on_error: Callable[[str], None],
+        on_usage: Optional[Callable[[Dict[str, Any]], None]] = None,
     ) -> bool:
         with self._lock:
             if self._inflight:
@@ -99,7 +100,7 @@ class ChatAssistant:
 
         threading.Thread(
             target=self._worker,
-            args=(model, messages, on_delta, on_done, on_error),
+            args=(model, messages, on_delta, on_done, on_error, on_usage),
             daemon=True,
         ).start()
         return True
@@ -111,11 +112,12 @@ class ChatAssistant:
         on_delta: Callable[[str], None],
         on_done: Callable[[str], None],
         on_error: Callable[[str], None],
+        on_usage: Optional[Callable[[Dict[str, Any]], None]] = None,
     ) -> None:
         try:
             client = self._build_client()
             if self.config.stream:
-                full, images = client.stream_chat(
+                full, images, usage = client.stream_chat(
                     model=model,
                     messages=messages,
                     on_delta=lambda text: GLib.idle_add(on_delta, text),
@@ -124,7 +126,7 @@ class ChatAssistant:
                     max_tokens=self.config.max_tokens,
                 )
             else:
-                full, images = client.chat(
+                full, images, usage = client.chat(
                     model=model,
                     messages=messages,
                     temperature=self.config.temperature,
@@ -138,6 +140,9 @@ class ChatAssistant:
                     extra = ("\n\n" if full.strip() else "") + markdown_links
                     full += extra
                     GLib.idle_add(on_delta, extra)
+
+            if usage and on_usage is not None:
+                GLib.idle_add(on_usage, usage)
 
             GLib.idle_add(on_done, full)
         except OpenRouterError as exc:
