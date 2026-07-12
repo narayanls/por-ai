@@ -15,6 +15,9 @@ depends=(
   'python-pypdf'
   'hicolor-icon-theme'
   'python-odfpy'
+  'libspelling'
+  'hunspell'
+  'hunspell-pt-br'
 )
 # Pacote local: não baixa nada. Empacota a árvore usr/ que já existe no repo.
 # Por isso source=() está vazio e os arquivos são lidos de $startdir.

@@ -49,6 +49,9 @@ fpm -s dir -t deb \
     --depends "libadwaita-1-0" \
     --depends "gir1.2-adw-1" \
     --depends "python3-odf" \
+    --depends "libspelling-1-dev" \
+    --depends "gir1.2-spelling-1" \
+    --depends "hunspell-pt-br" \
     usr/
 
 echo
