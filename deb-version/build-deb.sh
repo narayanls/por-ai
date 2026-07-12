@@ -6,7 +6,7 @@
 set -eu
 
 PKGNAME="por-ai"
-VERSION="0.1.7.0"
+VERSION="0.1.7.8"
 
 # ── 1. Limpa caches de bytecode e garante permissões ────────────────────────
 find usr -type d -name '__pycache__' -exec rm -rf {} + 2>/dev/null || true
