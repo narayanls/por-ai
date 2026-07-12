@@ -66,7 +66,7 @@ class MessageRow(Gtk.Box):
         if self._is_assistant:
             self._label.set_selectable(True)
             self._label.set_focus_on_click(False)
-            self._label.set_can_focus(False)
+            self._label.set_can_focus(True)
             self._label.set_use_markup(True)
             self._label.connect("activate-link", self._on_link_activated)
             self._set_markup(text)
