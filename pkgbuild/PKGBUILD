@@ -10,6 +10,7 @@ depends=(
   'python'
   'gtk4'
   'libadwaita'
+  'gtksourceview5'
   'python-gobject'
   'python-requests'
   'python-pypdf'

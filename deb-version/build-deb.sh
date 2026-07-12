@@ -48,9 +48,12 @@ fpm -s dir -t deb \
     --depends "gir1.2-gtk-4.0" \
     --depends "libadwaita-1-0" \
     --depends "gir1.2-adw-1" \
-    --depends "python3-odf" \
-    --depends "libspelling-1-dev" \
+    --depends "libgtksourceview-5-0" \
+    --depends "gir1.2-gtksource-5" \
+    --depends "libspelling-1-1" \
     --depends "gir1.2-spelling-1" \
+    --depends "python3-odf" \
+    --depends "hunspell" \
     --depends "hunspell-pt-br" \
     usr/
 
