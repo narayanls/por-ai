@@ -1,6 +1,6 @@
 # Maintainer: Narayan Lima da Silva <narayan.song@gmail.com>
 pkgname=por-ai
-pkgver=0.1.7.7
+pkgver=0.1.7.8
 pkgrel=1
 pkgdesc="Chat privado com modelos do OpenRouter (GTK4/Adwaita)"
 arch=('any')
@@ -10,11 +10,15 @@ depends=(
   'python'
   'gtk4'
   'libadwaita'
+  'gtksourceview5'
   'python-gobject'
   'python-requests'
   'python-pypdf'
   'hicolor-icon-theme'
   'python-odfpy'
+  'libspelling'
+  'hunspell'
+  'hunspell-pt-br'
 )
 # Pacote local: não baixa nada. Empacota a árvore usr/ que já existe no repo.
 # Por isso source=() está vazio e os arquivos são lidos de $startdir.
