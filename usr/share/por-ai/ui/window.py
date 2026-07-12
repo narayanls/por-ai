@@ -943,6 +943,12 @@ class PorAiWindow(Adw.ApplicationWindow):
         self._pending_attachments.append(path)
         return "ok"
 
+    def _toast(self, message: str, timeout: int = 3) -> None:
+        """Exibe uma notificação toast sobre a interface."""
+        toast = Adw.Toast.new(message)
+        toast.set_timeout(timeout)
+        self._toast_overlay.add_toast(toast)
+
     def _toast_unsupported(self, path: str) -> None:
         self._toast(self.assistant.unsupported_reason(path))
 
