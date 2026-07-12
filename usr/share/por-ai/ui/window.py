@@ -22,6 +22,27 @@ gi.require_version("Gtk", "4.0")
 gi.require_version("Adw", "1")
 from gi.repository import Adw, Gdk, Gio, GLib, GObject, Gtk
 
+# Corretor ortográfico (opcional). A libspelling desta versão faz o realce
+# via GtkSourceView, então precisamos também do GtkSource. Se qualquer um
+# faltar, o app segue funcionando sem correção — sem quebrar a importação.
+try:
+    gi.require_version("GtkSource", "5")
+    from gi.repository import GtkSource
+
+    _HAS_SOURCEVIEW = True
+except (ValueError, ImportError):
+    GtkSource = None
+    _HAS_SOURCEVIEW = False
+
+try:
+    gi.require_version("Spelling", "1")
+    from gi.repository import Spelling
+
+    _HAS_SPELLING = True
+except (ValueError, ImportError):
+    Spelling = None
+    _HAS_SPELLING = False
+
 from core.assistant import ChatAssistant
 from core.config import Config
 from core.storage import ConversationStore
@@ -337,13 +358,44 @@ class PorAiWindow(Adw.ApplicationWindow):
         row.append(attach_button)
 
         # Campo de entrada multilinha.
-        self._input_view = Gtk.TextView()
+        # Usa GtkSource.View quando disponível — é o que a libspelling desta
+        # versão exige para o sublinhado inline. É subclasse de Gtk.TextView,
+        # então o resto do código (margens, wrap, controllers) não muda.
+        if _HAS_SOURCEVIEW:
+            self._input_view = GtkSource.View()
+        else:
+            self._input_view = Gtk.TextView()
         self._input_view.set_wrap_mode(Gtk.WrapMode.WORD_CHAR)
+        if _HAS_SOURCEVIEW:
+            # O GtkSource.View traz um "style scheme" próprio (claro por
+            # padrão), que ignora o tema do GTK e deixa o fundo branco.
+            # Sincronizamos com o modo claro/escuro do sistema.
+            self._apply_source_style_scheme()
+            style_manager = Adw.StyleManager.get_default()
+            style_manager.connect(
+                "notify::dark",
+                lambda *_: self._apply_source_style_scheme(),
+            )
         self._input_view.set_accepts_tab(False)
         self._input_view.set_top_margin(8)
         self._input_view.set_bottom_margin(8)
         self._input_view.set_left_margin(8)
         self._input_view.set_right_margin(8)
+
+        # Corretor ortográfico (sublinhado vermelho + sugestões no botão direito).
+        self._setup_spellcheck()
+
+        # Move o cursor de texto para debaixo do ponteiro ANTES do menu de
+        # contexto abrir. Sem isso, no primeiro clique direito a libspelling
+        # ainda não "vê" a palavra sob o ponteiro e não mostra sugestões —
+        # obrigando o usuário a clicar duas vezes / trocar de idioma.
+        if _HAS_SOURCEVIEW:
+            right_click = Gtk.GestureClick()
+            right_click.set_button(Gdk.BUTTON_SECONDARY)
+            # Fase CAPTURE: roda antes do handler interno que abre o menu.
+            right_click.set_propagation_phase(Gtk.PropagationPhase.CAPTURE)
+            right_click.connect("pressed", self._on_input_right_click)
+            self._input_view.add_controller(right_click)
 
         text_file_drop = Gtk.DropTarget.new(Gdk.FileList, Gdk.DragAction.COPY)
         text_file_drop.connect("drop", self._on_files_dropped)
@@ -376,9 +428,103 @@ class PorAiWindow(Adw.ApplicationWindow):
         outer.append(row)
         return outer
 
-    # ------------------------------------------------------------------ #
-    # Placeholder / boas-vindas                                            #
-    # ------------------------------------------------------------------ #
+    def _apply_source_style_scheme(self) -> None:
+        """Escolhe um style scheme do GtkSource que combine com o tema.
+
+        Sem isso o fundo do input fica branco mesmo no modo escuro. Tenta
+        esquemas escuros conhecidos e cai para qualquer disponível.
+        """
+        if not _HAS_SOURCEVIEW:
+            return
+        try:
+            manager = GtkSource.StyleSchemeManager.get_default()
+            is_dark = Adw.StyleManager.get_default().get_dark()
+            # Preferências por modo; o primeiro que existir é usado.
+            prefer = (
+                ["Adwaita-dark", "classic-dark", "solarized-dark", "cobalt"]
+                if is_dark
+                else ["Adwaita", "classic", "solarized-light"]
+            )
+            scheme = None
+            for name in prefer:
+                scheme = manager.get_scheme(name)
+                if scheme is not None:
+                    break
+            if scheme is not None:
+                self._input_view.get_buffer().set_style_scheme(scheme)
+        except Exception as exc:  # noqa: BLE001
+            print(f"[spell] style scheme indisponível: {exc!r}", flush=True)
+
+    def _on_input_right_click(self, gesture, _n_press, x, y) -> None:
+        """Posiciona o caret sob o ponteiro no clique direito.
+
+        Assim a libspelling encontra a palavra logo no primeiro clique e já
+        exibe as sugestões, sem exigir um segundo clique ou troca de idioma.
+        """
+        view = self._input_view
+        # Converte a coordenada do widget para coordenada de buffer.
+        bx, by = view.window_to_buffer_coords(
+            Gtk.TextWindowType.WIDGET, int(x), int(y)
+        )
+        result = view.get_iter_at_location(bx, by)
+        # get_iter_at_location retorna (ok, iter) no GTK4.
+        text_iter = result[1] if isinstance(result, tuple) else result
+        if text_iter is not None:
+            view.get_buffer().place_cursor(text_iter)
+
+    def _setup_spellcheck(self) -> None:
+        """Liga o corretor ortográfico (libspelling) ao campo de entrada.
+
+        Faz o sublinhado vermelho inline e adiciona as sugestões ao menu de
+        contexto (botão direito). Silencioso e sem efeito se a libspelling
+        não estiver disponível.
+        """
+        if not (_HAS_SPELLING and _HAS_SOURCEVIEW):
+            return
+        try:
+            provider = Spelling.Provider.get_default()
+
+            # Cria o checker travado em pt_BR. Diferente do que fizemos antes,
+            # NÃO mascaramos falha em silêncio: logamos para saber se o
+            # dicionário não foi encontrado.
+            checker = None
+            try:
+                checker = Spelling.Checker.new(provider, "pt_BR")
+                lang = checker.get_language() if checker is not None else None
+                print(f"[spell] checker pt_BR criado; language={lang!r}",
+                      flush=True)
+            except Exception as exc:  # noqa: BLE001
+                print(f"[spell] falha ao criar checker pt_BR: {exc!r}",
+                      flush=True)
+                checker = Spelling.Checker.get_default()
+                print(f"[spell] usando default; language="
+                      f"{checker.get_language()!r}", flush=True)
+
+            # get_buffer() aqui é um GtkSource.Buffer (o input é GtkSource.View),
+            # que é justamente o tipo que o TextBufferAdapter desta versão exige.
+            buffer = self._input_view.get_buffer()
+            # O adapter precisa ser mantido vivo (guardado em self), senão o
+            # coletor de lixo o descarta e o realce para de funcionar.
+            self._spell_adapter = Spelling.TextBufferAdapter.new(buffer, checker)
+            # Reforça o idioma no próprio adapter (algumas versões expõem a
+            # troca de idioma pela ação "spelling.language").
+            try:
+                self._spell_adapter.set_language("pt_BR")
+                print("[spell] adapter.set_language('pt_BR') OK", flush=True)
+            except Exception as exc:  # noqa: BLE001
+                print(f"[spell] adapter.set_language indisponível: {exc!r}",
+                      flush=True)
+
+            self._input_view.set_extra_menu(
+                self._spell_adapter.get_menu_model()
+            )
+            self._input_view.insert_action_group(
+                "spelling", self._spell_adapter
+            )
+            self._spell_adapter.set_enabled(True)
+        except Exception as exc:  # noqa: BLE001 — corretor é um extra opcional
+            self._spell_adapter = None
+            print(f"[spell] corretor indisponível: {exc!r}", flush=True)
 
     # ------------------------------------------------------------------ #
     # Placeholder / boas-vindas                                            #
@@ -1311,5 +1457,3 @@ class PorAiWindow(Adw.ApplicationWindow):
         about.present()
 
     # ------------------------------------------------------------------ #
-    # Diversos                                                             #
-    
