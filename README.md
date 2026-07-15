@@ -49,7 +49,7 @@ sudo pacman -U por-ai-*.pkg.tar.zst
 ```
 
 **Dependências** (instaladas automaticamente pelo pacman):
-`gtk4` `libadwaita` `python-gobject` `python-requests` `python-pypdf` `python-odfpy`
+`gtk4` `libadwaita` `python-gobject` `python-requests` `python-pypdf` `python-odfpy` `gtksourceview5` `libspelling` `hunspell` `hunspell-pt-br`
 
 ---
 
@@ -62,7 +62,7 @@ sudo apt install ./por-ai_*.deb
 ```
 
 **Dependências** (instaladas automaticamente pelo apt):
-`libgtk-4-1` `libadwaita-1-0` `gir1.2-gtk-4.0` `gir1.2-adw-1` `python3-gi` `python3-requests` `python3-pypdf` `python3-odf`
+`libgtk-4-1` `libadwaita-1-0` `gir1.2-gtk-4.0` `gir1.2-adw-1` `python3-gi` `python3-requests` `python3-pypdf` `python3-odf` `gir1.2-gtksource-5` `libgtksourceview-5-0` `libspelling-1-1` `gir1.2-spelling-1` `hunspell` `hunspell-pt-br`
 
 ---
 
