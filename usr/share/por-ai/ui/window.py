@@ -61,7 +61,7 @@ except Exception as _exc:  # pylint: disable=broad-except
 
 # Versão embutida do app — fonte única, usada na janela "Sobre" e como
 # fallback do verificador de updates quando o version.txt não existe.
-APP_VERSION = "0.1.7.7"
+APP_VERSION = "0.1.7.9"
 
 _CSS = b"""
 .message-bubble {
@@ -1437,6 +1437,18 @@ class PorAiWindow(Adw.ApplicationWindow):
     def _on_preferences(self, *_args) -> None:
         prefs = PreferencesWindow(self, self.config, on_saved=self._on_prefs_saved)
         prefs.present()
+
+    def _prompt_for_api_key(self) -> bool:
+        """Abre as Preferências pedindo a chave da API na primeira execução
+        (ou sempre que config.is_configured() for False).
+
+        Chamado via GLib.idle_add/timeout, então deve retornar False para não
+        ser reagendado; também é chamado diretamente ao tentar enviar uma
+        mensagem sem chave configurada (ver _on_send_clicked).
+        """
+        self._toast("Configure sua chave da API do OpenRouter para começar.")
+        self._on_preferences()
+        return False
 
     def _on_prefs_saved(self) -> None:
         current = self._current_model()
