@@ -6,7 +6,7 @@
 set -eu
 
 PKGNAME="por-ai"
-VERSION="0.1.7.8"
+VERSION="0.1.7.9"
 
 # ── 1. Limpa caches de bytecode e garante permissões ────────────────────────
 find usr -type d -name '__pycache__' -exec rm -rf {} + 2>/dev/null || true
@@ -19,7 +19,7 @@ echo "v${VERSION}" > usr/share/por-ai/version.txt
 find usr/share/por-ai -type f -name '*.py' | xargs chmod 644
 chmod 755 usr/bin/por-ai
 chmod 755 usr/share/por-ai/main.py
-chmod 644 usr/share/applications/io.github.porai.PorAi.desktop
+chmod 644 usr/share/applications/io.github.narayanls.PorAi.desktop
 chmod 644 usr/share/icons/hicolor/scalable/apps/por-ai.svg
 
 # ── 2. Remove .deb anterior ──────────────────────────────────────────────────
@@ -34,9 +34,9 @@ fpm -s dir -t deb \
     -a all \
     -C . \
     --description "Chat privado com modelos do OpenRouter (GTK4/Adwaita)" \
-    --url "https://github.com/SEU_USUARIO/por-ai" \
-    --maintainer "Seu Nome <voce@example.com>" \
-    --license "GPL-3.0-or-later" \
+    --url "https://github.com/narayanls/por-ai" \
+    --maintainer "Narayan Silva <narayan,song@gmail.com>" \
+    --license "GPL-3.0 license" \
     --category "utils" \
     --no-auto-depends \
     --after-install after-install.sh \
@@ -50,7 +50,7 @@ fpm -s dir -t deb \
     --depends "gir1.2-adw-1" \
     --depends "libgtksourceview-5-0" \
     --depends "gir1.2-gtksource-5" \
-    --depends "libspelling-1-1" \
+    --depends "libspelling-1-1 | libspelling-1-2" \
     --depends "gir1.2-spelling-1" \
     --depends "python3-odf" \
     --depends "hunspell" \
