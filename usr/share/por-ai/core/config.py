@@ -166,13 +166,13 @@ class Config:
 
     @property
     def max_tokens(self) -> Optional[int]:
-        value = self.get("max_tokens", 8192)
+        value = self.get("max_tokens", 800192)
         if value in (None, "", 0):
             return None
         try:
             parsed = int(value)
         except (TypeError, ValueError):
-            return 8192
+            return 800192
         return parsed if parsed > 0 else None
  
     @max_tokens.setter
@@ -183,7 +183,7 @@ class Config:
         try:
             self.set("max_tokens", int(value))
         except (TypeError, ValueError):
-            self.set("max_tokens", 8192)
+            self.set("max_tokens", 800192)
 
     @property
     def stream(self) -> bool:
