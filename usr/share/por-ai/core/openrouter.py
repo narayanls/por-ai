@@ -68,7 +68,7 @@ class OpenRouterClient:
 
     def list_models(self) -> List[Dict[str, Any]]:
         """Retorna a lista de modelos do OpenRouter (campo ``data``)."""
-        url = f"{OPENROUTER_BASE}/models"
+        url = f"{OPENROUTER_BASE}/models/user"
         try:
             response = requests.get(url, headers=self._headers(), timeout=self.timeout)
         except requests.RequestException as exc:
