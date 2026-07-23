@@ -61,7 +61,7 @@ except Exception as _exc:  # pylint: disable=broad-except
 
 # Versão embutida do app — fonte única, usada na janela "Sobre" e como
 # fallback do verificador de updates quando o version.txt não existe.
-APP_VERSION = "0.1.8.1"
+APP_VERSION = "0.1.8.0"
 
 _CSS = b"""
 .message-bubble {
@@ -218,11 +218,18 @@ class PorAiWindow(Adw.ApplicationWindow):
             GObject.BindingFlags.SYNC_CREATE | GObject.BindingFlags.BIDIRECTIONAL,
         )
 
-        # Em janelas estreitas a sidebar vira sobreposição.
+        # Em janelas estreitas a sidebar vira sobreposição. Sem o setter de
+        # "show-sidebar" abaixo, a sidebar continuava com show_sidebar=True
+        # (valor padrão) mesmo colapsada, então ela ficava flutuando por
+        # cima da área de chat assim que a janela ficasse estreita — o
+        # primeiro clique numa mensagem acertava essa sobreposição (ativando
+        # uma linha da lista de conversas) em vez do conteúdo, e só o
+        # segundo clique chegava de fato na bolha de mensagem.
         breakpoint = Adw.Breakpoint.new(
             Adw.BreakpointCondition.parse("max-width: 640px")
         )
         breakpoint.add_setter(self._split_view, "collapsed", True)
+        breakpoint.add_setter(self._split_view, "show-sidebar", False)
         self.add_breakpoint(breakpoint)
 
         # Toasts cobrem tudo.
@@ -320,6 +327,34 @@ class PorAiWindow(Adw.ApplicationWindow):
         self._scroller.set_policy(Gtk.PolicyType.NEVER, Gtk.PolicyType.AUTOMATIC)
         self._scroller.set_vexpand(True)
         self._scroller.set_child(self._messages_box)
+
+        # O ScrolledWindow envolve o messages_box (que não é Gtk.Scrollable)
+        # num Gtk.Viewport interno automaticamente. Esse Viewport tem a
+        # propriedade "scroll-to-focus" (GTK 4.12+), True por padrão: sempre
+        # que um widget filho ganha foco de teclado, ele reajusta a rolagem
+        # pra garantir que o widget fique visível — mesmo que já esteja. O
+        # Gtk.Label de cada resposta pede foco como parte do próprio gesto
+        # de iniciar uma seleção de texto (can_focus=True), então isso
+        # empurrava a rolagem uns pixels bem no momento do clique,
+        # interrompendo o clique-e-arrasto — daí precisar clicar 2x (no
+        # segundo clique o label já estava focado, então nada se mexia).
+        viewport = self._scroller.get_child()
+        if isinstance(viewport, Gtk.Viewport) and hasattr(viewport, "set_scroll_to_focus"):
+            viewport.set_scroll_to_focus(False)
+
+        # Rastreia se o usuário está com o botão do mouse pressionado dentro
+        # da área de mensagens (ex.: arrastando pra selecionar texto). Enquanto
+        # isso for verdade, _scroll_to_bottom() não deve mexer na rolagem —
+        # senão um chunk de streaming chegando no meio do gesto de seleção
+        # puxa a view pro fim e cancela a seleção em andamento.
+        self._user_selecting = False
+        click_gesture = Gtk.GestureClick()
+        click_gesture.set_button(0)  # qualquer botão
+        click_gesture.set_propagation_phase(Gtk.PropagationPhase.CAPTURE)
+        click_gesture.connect("pressed", lambda *_: setattr(self, "_user_selecting", True))
+        click_gesture.connect("released", lambda *_: setattr(self, "_user_selecting", False))
+        click_gesture.connect("stopped", lambda *_: setattr(self, "_user_selecting", False))
+        self._scroller.add_controller(click_gesture)
 
         # Mensagem de boas-vindas.
         self._show_placeholder()
@@ -831,7 +866,7 @@ class PorAiWindow(Adw.ApplicationWindow):
 
         self._clear_input()
         self._set_busy(True)
-        self._scroll_to_bottom()
+        self._scroll_to_bottom(force=True)
 
         messages = [{"role": "system", "content": self.config.system_prompt}]
         messages.extend(
@@ -881,7 +916,7 @@ class PorAiWindow(Adw.ApplicationWindow):
         self._streaming_row = None
         self._pending_usage = None
         self._set_busy(False)
-        self._scroll_to_bottom()
+        self._scroll_to_bottom(force=True)
         return False
 
     def _on_error(self, message: str) -> bool:
@@ -905,9 +940,31 @@ class PorAiWindow(Adw.ApplicationWindow):
             self._send_button.remove_css_class("destructive-action")
             self._send_button.add_css_class("suggested-action")
 
-    def _scroll_to_bottom(self) -> None:
+    def _scroll_to_bottom(self, force: bool = False) -> None:
+        """Rola a área de mensagens pro final.
+
+        Por padrão (``force=False``) isso é "inteligente": não faz nada se o
+        usuário estiver com o botão do mouse pressionado (selecionando texto)
+        ou se ele já tiver rolado pra cima de propósito pra ler algo antigo —
+        só rola se a view já estava perto do final. Isso evita que o
+        streaming da resposta puxe a tela pra baixo no meio de uma seleção,
+        que era o que fazia o clique "falhar" e precisar de uma segunda
+        tentativa. Use ``force=True`` para os casos em que a rolagem para o
+        final é sempre desejada (enviar mensagem nova, trocar de conversa).
+        """
+
         def scroll() -> bool:
+            if self._user_selecting and not force:
+                return False
             adj = self._scroller.get_vadjustment()
+            if not force:
+                # "Perto do final": tolerância de ~48px pra não exigir estar
+                # exatamente no pixel zero.
+                near_bottom = (
+                    adj.get_upper() - adj.get_page_size() - adj.get_value()
+                ) <= 48
+                if not near_bottom:
+                    return False
             adj.set_value(adj.get_upper() - adj.get_page_size())
             return False
 
@@ -1318,7 +1375,7 @@ class PorAiWindow(Adw.ApplicationWindow):
                 self._messages_box.append(row)
 
         self._set_busy(False)
-        self._scroll_to_bottom()
+        self._scroll_to_bottom(force=True)
         GLib.idle_add(lambda: self._input_view.grab_focus() and False)
 
     def _on_delete_conv(self, conv_id: str) -> None:
