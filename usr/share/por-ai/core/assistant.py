@@ -79,6 +79,23 @@ class ChatAssistant:
             site_name=self.config.site_name,
         )
 
+    @staticmethod
+    def _is_image_model(model: str) -> bool:
+        """Detecta modelos de geração/edição de imagem pelo padrão de ID
+        usado no catálogo do OpenRouter (ex.: ``google/gemini-3.1-flash-
+        image``, ``google/gemini-2.5-flash-image``).
+
+        Desde o lançamento da Unified Image API do OpenRouter (final de
+        junho de 2026), a chamada de chat completions só recebe a imagem de
+        volta se o pedido incluir explicitamente ``modalities: ["image",
+        "text"]``. Sem isso, o modelo tenta representar a imagem como uma
+        sequência gigantesca de tokens de texto e a requisição estoura o
+        limite de contexto do provedor (erro HTTP 400 "maximum context
+        length"). É o mesmo passo que o site do OpenRouter faz quando você
+        "ativa a ferramenta de geração de imagem" no chat deles.
+        """
+        return "-image" in model.lower()
+
     # ------------------------------------------------------------------ #
     # Envio                                                                #
     # ------------------------------------------------------------------ #
@@ -116,6 +133,17 @@ class ChatAssistant:
     ) -> None:
         try:
             client = self._build_client()
+            extra: Dict[str, Any] = {}
+            max_tokens = self.config.max_tokens
+            if self._is_image_model(model):
+                extra["modalities"] = ["image", "text"]
+                # Não força max_tokens pra modelos de imagem: o valor
+                # configurado em Preferências é pensado pra respostas de
+                # texto e pode ser bem maior que a janela de contexto do
+                # modelo de imagem, causando erro de limite de contexto
+                # mesmo com a modalidade correta. Deixa o provedor decidir.
+                max_tokens = None
+
             if self.config.stream:
                 full, images, usage = client.stream_chat(
                     model=model,
@@ -123,14 +151,16 @@ class ChatAssistant:
                     on_delta=lambda text: GLib.idle_add(on_delta, text),
                     should_cancel=self._cancel.is_set,
                     temperature=self.config.temperature,
-                    max_tokens=self.config.max_tokens,
+                    max_tokens=max_tokens,
+                    **extra,
                 )
             else:
                 full, images, usage = client.chat(
                     model=model,
                     messages=messages,
                     temperature=self.config.temperature,
-                    max_tokens=self.config.max_tokens,
+                    max_tokens=max_tokens,
+                    **extra,
                 )
                 GLib.idle_add(on_delta, full)
 
