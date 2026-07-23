@@ -288,7 +288,7 @@ class PorAiWindow(Adw.ApplicationWindow):
         menu_button.set_icon_name("open-menu-symbolic")
         menu_button.set_menu_model(menu)
         menu_button.set_tooltip_text("Menu")
-        header.pack_end(menu_button)
+        header.pack_start(menu_button)
 
         return header
 
@@ -298,6 +298,13 @@ class PorAiWindow(Adw.ApplicationWindow):
         header = Adw.HeaderBar()
         header.set_show_end_title_buttons(False)
         header.set_title_widget(Adw.WindowTitle(title="Conversas", subtitle=""))
+
+        # Botão de busca no canto superior — alterna a barra de busca abaixo
+        # do cabeçalho (padrão GNOME: Gtk.SearchBar ligado a um toggle).
+        self._sidebar_search_button = Gtk.ToggleButton()
+        self._sidebar_search_button.set_icon_name("system-search-symbolic")
+        self._sidebar_search_button.set_tooltip_text("Buscar conversas")
+        header.pack_start(self._sidebar_search_button)
         #new_button = Gtk.Button()
         #new_button.set_icon_name("document-new-symbolic")
         #new_button.set_tooltip_text("Nova conversa")
@@ -305,10 +312,37 @@ class PorAiWindow(Adw.ApplicationWindow):
         #header.pack_start(new_button)
         view.add_top_bar(header)
 
+        # Barra de busca: fica escondida (altura zero) até o botão ser
+        # ativado ou o usuário digitar com a lista em foco.
+        self._sidebar_search_entry = Gtk.SearchEntry()
+        self._sidebar_search_entry.set_placeholder_text("Buscar por nome da conversa…")
+        self._sidebar_search_entry.set_hexpand(True)
+        self._sidebar_search_entry.connect(
+            "search-changed", self._on_sidebar_search_changed
+        )
+        self._sidebar_search_entry.connect(
+            "stop-search",
+            lambda *_: self._sidebar_search_button.set_active(False),
+        )
+
+        search_bar = Gtk.SearchBar()
+        search_bar.set_child(self._sidebar_search_entry)
+        search_bar.connect_entry(self._sidebar_search_entry)
+        self._sidebar_search_button.bind_property(
+            "active",
+            search_bar,
+            "search-mode-enabled",
+            GObject.BindingFlags.SYNC_CREATE | GObject.BindingFlags.BIDIRECTIONAL,
+        )
+        view.add_top_bar(search_bar)
+
+        self._sidebar_search_text = ""
+
         self._conv_list = Gtk.ListBox()
         self._conv_list.add_css_class("navigation-sidebar")
         self._conv_list.set_selection_mode(Gtk.SelectionMode.SINGLE)
         self._conv_list.connect("row-activated", self._on_conv_activated)
+        self._conv_list.set_filter_func(self._filter_conv_row)
 
         scroller = Gtk.ScrolledWindow()
         scroller.set_policy(Gtk.PolicyType.NEVER, Gtk.PolicyType.AUTOMATIC)
@@ -316,6 +350,16 @@ class PorAiWindow(Adw.ApplicationWindow):
         scroller.set_child(self._conv_list)
         view.set_content(scroller)
         return view
+
+    def _on_sidebar_search_changed(self, entry: Gtk.SearchEntry) -> None:
+        self._sidebar_search_text = entry.get_text().strip().lower()
+        self._conv_list.invalidate_filter()
+
+    def _filter_conv_row(self, row: Gtk.ListBoxRow) -> bool:
+        if not self._sidebar_search_text:
+            return True
+        title = getattr(row, "_search_title", "")
+        return self._sidebar_search_text in title
 
     def _build_chat_area(self) -> Gtk.Widget:
         self._messages_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=2)
@@ -1244,6 +1288,9 @@ class PorAiWindow(Adw.ApplicationWindow):
     def _make_conv_row(self, meta: Dict[str, Any]) -> Gtk.ListBoxRow:
         row = Gtk.ListBoxRow()
         row.set_name(meta["id"])
+        # Usado por _filter_conv_row() pra busca por nome, sem diferenciar
+        # maiúsculas/minúsculas.
+        row._search_title = str(meta.get("title", "")).lower()
 
         box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=6)
         box.set_margin_top(6)
