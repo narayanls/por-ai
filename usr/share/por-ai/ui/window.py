@@ -288,7 +288,7 @@ class PorAiWindow(Adw.ApplicationWindow):
         menu_button.set_icon_name("open-menu-symbolic")
         menu_button.set_menu_model(menu)
         menu_button.set_tooltip_text("Menu")
-        header.pack_start(menu_button)
+        header.pack_end(menu_button)
 
         return header
 
