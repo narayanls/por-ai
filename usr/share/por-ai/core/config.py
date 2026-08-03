@@ -5,9 +5,7 @@ A configuração fica em ``~/.config/por-ai/config.json`` (caminho XDG) e guarda
 a chave da API do OpenRouter, o modelo padrão, o prompt de sistema e algumas
 preferências. O arquivo é gravado com permissão 0600 (somente o dono lê/escreve).
 
-Observação de privacidade: a chave da API é gravada em texto plano no JSON.
-Para algo mais robusto no futuro, vale guardar a chave no Secret Service
-(libsecret / GNOME Keyring) em vez do arquivo. Veja a nota no README.
+
 """
 
 from __future__ import annotations
@@ -16,7 +14,7 @@ import json
 import logging
 import os
 import stat
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
 from gi.repository import GLib
 
@@ -52,7 +50,7 @@ DEFAULTS: Dict[str, Any] = {
     "site_name": "POR.ai",
     "system_prompt": DEFAULT_SYSTEM_PROMPT,
     "temperature": 1.0,
-    "max_tokens": 800192,
+    "max_tokens": None,  # None = Automático (calculado por modelo)
     "stream": True,
     "show_tray_icon": False,
 }
@@ -166,13 +164,15 @@ class Config:
 
     @property
     def max_tokens(self) -> Optional[int]:
-        value = self.get("max_tokens", 800192)
+        """None => modo Automático (o ChatAssistant calcula o teto a partir
+        da janela de contexto do modelo escolhido)."""
+        value = self.get("max_tokens", None)
         if value in (None, "", 0):
             return None
         try:
             parsed = int(value)
         except (TypeError, ValueError):
-            return 800192
+            return None
         return parsed if parsed > 0 else None
  
     @max_tokens.setter
@@ -183,7 +183,7 @@ class Config:
         try:
             self.set("max_tokens", int(value))
         except (TypeError, ValueError):
-            self.set("max_tokens", 800192)
+            self.set("max_tokens", None)
 
     @property
     def stream(self) -> bool:

@@ -16,8 +16,9 @@ import mimetypes
 import os
 import re
 import threading
+import time
 import uuid
-from typing import Any, Callable, Dict, List, Optional
+from typing import Any, Callable, Dict, List, Optional, Tuple
 
 from gi.repository import GLib
 
@@ -55,11 +56,18 @@ logger = logging.getLogger(__name__)
 class ChatAssistant:
     """Envia conversas ao OpenRouter sem travar a interface."""
 
+    # Tempo de vida do cache do catálogo de modelos (evita bater na API do
+    # OpenRouter a cada mensagem só pra saber a janela de contexto).
+    _MODEL_CACHE_TTL = 3600.0
+
     def __init__(self, config: Config) -> None:
         self.config = config
         self._lock = threading.RLock()
         self._inflight = False
         self._cancel = threading.Event()
+        self._model_cache: Dict[str, Dict[str, Any]] = {}
+        self._model_cache_time: float = 0.0
+        self._model_cache_lock = threading.Lock()
 
     # ------------------------------------------------------------------ #
     # Estado                                                               #
@@ -95,6 +103,127 @@ class ChatAssistant:
         "ativa a ferramenta de geração de imagem" no chat deles.
         """
         return "-image" in model.lower()
+
+    # ------------------------------------------------------------------ #
+    # Cálculo automático de max_tokens                                     #
+    # ------------------------------------------------------------------ #
+    #
+    # `max_tokens` limita a resposta (saída), mas conta dentro da mesma
+    # janela de contexto do prompt (entrada). Um valor fixo alto (ex.:
+    # herdado de um provedor com contexto enorme) estoura em modelos com
+    # janela menor — foi exatamente o bug relatado com modelos ":free".
+    #
+    # A solução: consultar no catálogo do OpenRouter (`list_models`) o
+    # `context_length` e o `top_provider.max_completion_tokens` do modelo
+    # escolhido, estimar quantos tokens o prompt atual já ocupa, e usar o
+    # que sobrar (com uma margem de segurança) como teto — sem nunca
+    # ultrapassar o que o modelo de fato aceita.
+
+    def _get_model_limits(
+        self, client: OpenRouterClient, model: str
+    ) -> Tuple[Optional[int], Optional[int]]:
+        """Retorna (context_length, max_completion_tokens) do modelo, usando
+        um cache de até 1h do catálogo pra não bater na API a cada envio.
+        Se a consulta falhar (sem rede, chave inválida etc.), devolve
+        (None, None) — o chamador cai de volta no comportamento antigo."""
+        with self._model_cache_lock:
+            expired = (time.monotonic() - self._model_cache_time) > self._MODEL_CACHE_TTL
+            if expired or not self._model_cache:
+                try:
+                    raw = client.list_models()
+                except OpenRouterError:
+                    raw = None
+                if raw is not None:
+                    cache: Dict[str, Dict[str, Any]] = {}
+                    for entry in raw:
+                        if isinstance(entry, dict) and entry.get("id"):
+                            cache[str(entry["id"])] = entry
+                    self._model_cache = cache
+                    self._model_cache_time = time.monotonic()
+            entry = self._model_cache.get(model)
+        return self._extract_limits(entry)
+
+    @staticmethod
+    def _extract_limits(
+        entry: Optional[Dict[str, Any]],
+    ) -> Tuple[Optional[int], Optional[int]]:
+        if not isinstance(entry, dict):
+            return None, None
+        top_provider = entry.get("top_provider")
+        top_provider = top_provider if isinstance(top_provider, dict) else {}
+
+        context_length = entry.get("context_length")
+        if context_length is None:
+            context_length = top_provider.get("context_length")
+        max_completion = top_provider.get("max_completion_tokens")
+
+        def _to_int(value: Any) -> Optional[int]:
+            try:
+                parsed = int(value)
+            except (TypeError, ValueError):
+                return None
+            return parsed if parsed > 0 else None
+
+        return _to_int(context_length), _to_int(max_completion)
+
+    @staticmethod
+    def _estimate_prompt_tokens(messages: List[Any]) -> int:
+        """Estimativa grosseira (mas conservadora) do tamanho do prompt em
+        tokens, sem depender de um tokenizador específico de cada modelo."""
+        total_chars = 0
+        image_count = 0
+        for message in messages:
+            content = message.get("content") if isinstance(message, dict) else None
+            if isinstance(content, str):
+                total_chars += len(content)
+            elif isinstance(content, list):
+                for block in content:
+                    if not isinstance(block, dict):
+                        continue
+                    if block.get("type") == "text":
+                        total_chars += len(str(block.get("text", "")))
+                    elif block.get("type") == "image_url":
+                        image_count += 1
+        # ~4 caracteres por token é uma aproximação razoável pra português/
+        # inglês. Imagens custam uma quantidade de tokens que varia bastante
+        # por modelo; usamos uma estimativa conservadora por imagem pra não
+        # subestimar o gasto.
+        return (total_chars // 4) + (image_count * 1500)
+
+    def _resolve_max_tokens(
+        self,
+        client: OpenRouterClient,
+        model: str,
+        messages: List[Any],
+    ) -> Optional[int]:
+        configured = self.config.max_tokens  # None/0 em Preferências = automático
+        context_length, max_completion = self._get_model_limits(client, model)
+
+        limit_candidates: List[int] = []
+        if max_completion:
+            limit_candidates.append(max_completion)
+        if context_length:
+            prompt_estimate = self._estimate_prompt_tokens(messages)
+            safety_margin = 256  # overhead de formatação, roles, etc.
+            limit_candidates.append(max(context_length - prompt_estimate - safety_margin, 0))
+
+        model_limit = min(limit_candidates) if limit_candidates else None
+
+        if configured is None:
+            # Modo automático: usa o maior valor seguro que o modelo aguenta.
+            if model_limit is None:
+                # Não conseguimos metadados do modelo (ex.: catálogo
+                # indisponível): deixa o provedor aplicar seu próprio
+                # padrão, em vez de arriscar um número inventado.
+                return None
+            return model_limit if model_limit >= 16 else None
+
+        # Valor manual do usuário: nunca deixa passar do que o modelo aceita.
+        if model_limit is not None:
+            if model_limit < 16:
+                return None
+            return min(configured, model_limit)
+        return configured
 
     # ------------------------------------------------------------------ #
     # Envio                                                                #
@@ -134,7 +263,6 @@ class ChatAssistant:
         try:
             client = self._build_client()
             extra: Dict[str, Any] = {}
-            max_tokens = self.config.max_tokens
             if self._is_image_model(model):
                 extra["modalities"] = ["image", "text"]
                 # Não força max_tokens pra modelos de imagem: o valor
@@ -143,6 +271,8 @@ class ChatAssistant:
                 # modelo de imagem, causando erro de limite de contexto
                 # mesmo com a modalidade correta. Deixa o provedor decidir.
                 max_tokens = None
+            else:
+                max_tokens = self._resolve_max_tokens(client, model, messages)
 
             if self.config.stream:
                 full, images, usage = client.stream_chat(
