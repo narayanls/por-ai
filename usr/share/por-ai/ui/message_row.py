@@ -49,13 +49,38 @@ class MessageRow(Gtk.Box):
         bubble.set_hexpand(False)
         row.append(bubble)
 
-        sender = Gtk.Label(
-            label="Assistente" if self._is_assistant else "Você"
-        )
-        sender.add_css_class("caption")
-        sender.add_css_class("dim-label")
-        sender.set_halign(Gtk.Align.START)
-        bubble.append(sender)
+        if self._is_assistant:
+            # Cabeçalho da bolha: "Assistente" à esquerda, botão de copiar
+            # à direita — fica no topo pra ser fácil de achar em respostas
+            # longas (ex.: scripts), sem precisar rolar até o fim.
+            header = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=6)
+
+            sender = Gtk.Label(label="Assistente")
+            sender.add_css_class("caption")
+            sender.add_css_class("dim-label")
+            sender.set_halign(Gtk.Align.START)
+            sender.set_hexpand(True)
+            header.append(sender)
+
+            copy_button = Gtk.Button()
+            copy_button.set_icon_name("edit-copy-symbolic")
+            copy_button.add_css_class("flat")
+            copy_button.add_css_class("circular")
+            copy_button.set_tooltip_text("Copiar resposta")
+            copy_button.set_valign(Gtk.Align.START)
+            copy_button.set_halign(Gtk.Align.END)
+            copy_button.connect("clicked", self._on_copy)
+            header.append(copy_button)
+            self._copy_button = copy_button
+
+            bubble.append(header)
+        else:
+            sender = Gtk.Label(label="Você")
+            sender.add_css_class("caption")
+            sender.add_css_class("dim-label")
+            sender.set_halign(Gtk.Align.START)
+            bubble.append(sender)
+            self._copy_button = None
 
         self._label = Gtk.Label()
         self._label.set_wrap(True)
@@ -87,17 +112,6 @@ class MessageRow(Gtk.Box):
             self._meta_label = None
 
 
-        if self._is_assistant:
-            copy_button = Gtk.Button()
-            copy_button.set_icon_name("edit-copy-symbolic")
-            copy_button.add_css_class("flat")
-            copy_button.set_tooltip_text("Copiar resposta")
-            copy_button.set_halign(Gtk.Align.START)
-            copy_button.connect("clicked", self._on_copy)
-            bubble.append(copy_button)
-            self._copy_button = copy_button
-        else:
-            self._copy_button = None
 
     # ------------------------------------------------------------------ #
     # API pública                                                          #
@@ -206,5 +220,3 @@ class MessageRow(Gtk.Box):
         # mantém casas suficientes pra não virar "$0"
         text = f"{cost:.6f}".rstrip("0").rstrip(".")
         return f"${text}"
-
-
