@@ -30,7 +30,7 @@ Você precisa criar uma chave de API no site do OpenRouter para usar este aplica
 - **Busca de modelos** — acesso ao catálogo completo do OpenRouter com busca por substring (ex.: digitar `kimi` encontra `moonshotai/kimi`)
 - **Streaming em tempo real** — respostas aparecem sendo escritas, com botão para interromper
 - **Markdown renderizado** — negrito, itálico, código, títulos.
-- **Anexos** — até 4 arquivos por mensagem: PDF, ODT, TXT, MD e imagens (PNG, JPG, WebP)
+- **Anexos** — até 4 arquivos por mensagem: PDF, ODT, TXT, MD, ODS, XLSX e imagens (PNG, JPG, WebP)
 - **Multimodal** — envie imagens (PNG, JPG, WebP) como entrada para modelos
   compatíveis analisarem (GPT-4o, Claude, Gemini…)
 - **Links clicáveis** — URLs nas respostas são renderizadas como links (imagens e planilhas). As imagens ficam salvas em /home/user/.local/share/por-ai/images e as planilhas em /home/user/.local/share/por-ai/spredsheets
