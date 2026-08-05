@@ -13,6 +13,7 @@ enviada ao modelo — fica claro na interface quando isso acontece.
 
 from __future__ import annotations
 
+import logging
 import os
 import time
 from typing import Any, Dict, List, Optional
@@ -49,14 +50,14 @@ from core.storage import ConversationStore
 from ui.message_row import MessageRow
 from ui.preferences import PreferencesWindow
 
+logger = logging.getLogger(__name__)
+
 try:
     from core.updater import UpdateChecker
     from ui.update_dialog import UpdateDialog
     _UPDATE_AVAILABLE = True
 except Exception as _exc:  # pylint: disable=broad-except
-    import traceback
-    print(f"[POR.ai] Recurso de atualização DESATIVADO: {_exc}", flush=True)
-    traceback.print_exc()
+    logger.warning("Recurso de atualização desativado: %s", _exc, exc_info=True)
     _UPDATE_AVAILABLE = False
 
 # Versão embutida do app — fonte única, usada na janela "Sobre" e como
@@ -130,26 +131,6 @@ class PorAiWindow(Adw.ApplicationWindow):
 
         if not self.config.is_configured():
             GLib.idle_add(self._prompt_for_api_key)
-
-        _probe = Gtk.EventControllerKey()
-        _probe.set_propagation_phase(Gtk.PropagationPhase.CAPTURE)
-
-        def _debug_key_probe(_c, kv, _kc, _st):
-            focus = self.get_focus()
-            focus_desc = f"{type(focus).__name__}@{id(focus):x}" if focus else "None"
-            is_search = focus is getattr(self, "_model_search", None)
-            print(
-                f"[DEBUG][{time.monotonic():.3f}] tecla chegou ao toplevel: "
-                f"keyval={kv} | foco_atual={focus_desc} | "
-                f"eh_campo_busca={is_search}",
-                flush=True,
-            )
-            return False
-
-        _probe.connect("key-pressed", _debug_key_probe)
-        self.add_controller(_probe)
-
-        
 
     # ------------------------------------------------------------------ #
     # Estilo e ações                                                       #
@@ -260,13 +241,6 @@ class PorAiWindow(Adw.ApplicationWindow):
         self._model_button.set_label(self._short_model_label(self._selected_model_id))
         self._model_popover = self._build_model_popover()
         self._model_button.set_popover(self._model_popover)
-        self._model_button.connect(
-            "notify::active",
-            lambda btn, _p: print(
-                f"[DEBUG][{time.monotonic():.3f}] model_button active={btn.get_active()}",
-                flush=True,
-            ),
-        )
         header.set_title_widget(self._model_button)
 
         # Botão "nova conversa".
@@ -430,7 +404,10 @@ class PorAiWindow(Adw.ApplicationWindow):
 
         attach_button = Gtk.Button()
         attach_button.set_icon_name("mail-attachment-symbolic")
-        attach_button.set_tooltip_text("Anexar arquivos — até 4 (pdf, odt, txt, md, png, jpg, webp)")
+        attach_button.set_tooltip_text(
+            "Anexar arquivos — até 4 "
+            "(pdf, odt, ods, xlsx, txt, md, csv, png, jpg, webp)"
+        )
         attach_button.add_css_class("flat")
         attach_button.set_valign(Gtk.Align.END)
         attach_button.connect("clicked", self._on_attach)
@@ -532,7 +509,7 @@ class PorAiWindow(Adw.ApplicationWindow):
             if scheme is not None:
                 self._input_view.get_buffer().set_style_scheme(scheme)
         except Exception as exc:  # noqa: BLE001
-            print(f"[spell] style scheme indisponível: {exc!r}", flush=True)
+            logger.debug("Esquema de estilo indisponível: %r", exc)
 
     def _on_input_right_click(self, gesture, _n_press, x, y) -> None:
         """Posiciona o caret sob o ponteiro no clique direito.
@@ -570,14 +547,11 @@ class PorAiWindow(Adw.ApplicationWindow):
             try:
                 checker = Spelling.Checker.new(provider, "pt_BR")
                 lang = checker.get_language() if checker is not None else None
-                print(f"[spell] checker pt_BR criado; language={lang!r}",
-                      flush=True)
+                logger.debug("Corretor pt_BR criado; idioma=%r", lang)
             except Exception as exc:  # noqa: BLE001
-                print(f"[spell] falha ao criar checker pt_BR: {exc!r}",
-                      flush=True)
+                logger.info("Falha ao criar corretor pt_BR: %r", exc)
                 checker = Spelling.Checker.get_default()
-                print(f"[spell] usando default; language="
-                      f"{checker.get_language()!r}", flush=True)
+                logger.info("Usando corretor padrão; idioma=%r", checker.get_language())
 
             # get_buffer() aqui é um GtkSource.Buffer (o input é GtkSource.View),
             # que é justamente o tipo que o TextBufferAdapter desta versão exige.
@@ -589,10 +563,9 @@ class PorAiWindow(Adw.ApplicationWindow):
             # troca de idioma pela ação "spelling.language").
             try:
                 self._spell_adapter.set_language("pt_BR")
-                print("[spell] adapter.set_language('pt_BR') OK", flush=True)
+                logger.debug("Idioma pt_BR aplicado no adapter")
             except Exception as exc:  # noqa: BLE001
-                print(f"[spell] adapter.set_language indisponível: {exc!r}",
-                      flush=True)
+                logger.debug("adapter.set_language indisponível: %r", exc)
 
             self._input_view.set_extra_menu(
                 self._spell_adapter.get_menu_model()
@@ -603,7 +576,7 @@ class PorAiWindow(Adw.ApplicationWindow):
             self._spell_adapter.set_enabled(True)
         except Exception as exc:  # noqa: BLE001 — corretor é um extra opcional
             self._spell_adapter = None
-            print(f"[spell] corretor indisponível: {exc!r}", flush=True)
+            logger.info("Corretor ortográfico indisponível: %r", exc)
 
     # ------------------------------------------------------------------ #
     # Placeholder / boas-vindas                                            #
@@ -722,29 +695,10 @@ class PorAiWindow(Adw.ApplicationWindow):
         """
         self._model_search.set_text("")
         self._populate_model_listbox(self._model_list)
-        print(
-            f"[DEBUG][{time.monotonic():.3f}] popover 'map' disparado | "
-            f"popover.get_mapped()={_popover.get_mapped()} | "
-            f"search.get_mapped()={self._model_search.get_mapped()} | "
-            f"search.get_realized()={self._model_search.get_realized()}",
-            flush=True,
-        )
         GLib.idle_add(self._focus_model_search)
 
     def _focus_model_search(self) -> bool:
-        before = self.get_focus()
-        ok = self._model_search.grab_focus()
-        after = self.get_focus()
-        print(
-            f"[DEBUG][{time.monotonic():.3f}] _focus_model_search idle: "
-            f"grab_focus_ok={ok} | "
-            f"search.get_mapped()={self._model_search.get_mapped()} | "
-            f"search.get_can_focus()={self._model_search.get_can_focus()} | "
-            f"foco_antes={type(before).__name__ if before else None} | "
-            f"foco_depois={type(after).__name__ if after else None} | "
-            f"foco_depois_eh_busca={after is self._model_search}",
-            flush=True,
-        )
+        self._model_search.grab_focus()
         return False
 
     def _on_model_search_changed(self, entry: Gtk.SearchEntry) -> None:
@@ -767,12 +721,7 @@ class PorAiWindow(Adw.ApplicationWindow):
 
     def _dismiss_model_popover(self) -> bool:
         self._model_button.popdown()
-        print("[DEBUG] após popdown -> popover visível:",
-            self._model_popover.get_visible(),
-            "| menubutton active:", self._model_button.get_active(),
-            "| foco janela:", self.get_focus(), flush=True)
         self._input_view.grab_focus()
-        print("[DEBUG] foco após grab:", self.get_focus(), flush=True)
         return False
 
     def _on_close_request(self, *_args) -> bool:
@@ -912,10 +861,32 @@ class PorAiWindow(Adw.ApplicationWindow):
         self._set_busy(True)
         self._scroll_to_bottom(force=True)
 
-        messages = [{"role": "system", "content": self.config.system_prompt}]
-        messages.extend(
-            {"role": m["role"], "content": m["content"]} for m in self._messages
+
+        # Instrução invisível: informa ao modelo que blocos de planilha viram
+        # arquivos locais baixáveis. Vai só no envio, nunca no que o usuário
+        # vê ou edita em Preferências. Como `sys_prompt` é reconstruído a cada
+        # envio a partir da config, não há risco de acumular.
+        sys_prompt = self.config.system_prompt or ""
+        sys_prompt += (
+            "\n\n[Ao gerar planilhas, responda com um bloco ```ods contendo "
+            "apenas JSON com as chaves sheet_name, columns (lista de títulos), "
+            "rows (lista de listas) e opcionalmente style (header_bg, "
+            "header_fg, row_bg, alt_row_bg, row_fg, border, em hexadecimal). "
+            "Use ```xlsx no lugar de ```ods somente se o usuário pedir "
+            "explicitamente Excel ou .xlsx. O sistema do usuário converte o "
+            "bloco em uma planilha formatada e baixável. Escolha as cores "
+            "livremente conforme o pedido — se o usuário citar um tema "
+            "conhecido (everforest, gruvbox, nord, dracula, solarized...), "
+            "use os valores hexadecimais reais daquela paleta — garantindo "
+            "contraste legível entre fonte e fundo. Valores numéricos devem "
+            "ir como número puro, sem aspas nem separador de milhar. "
+            "Não descreva o bloco nem explique como o arquivo será gerado: "
+            "o bloco é substituído por um link de download antes de a "
+            "resposta chegar ao usuário.]"
         )
+
+        messages = [{"role": "system", "content": sys_prompt}]
+        messages.extend(self._history_for_api())
 
         started = self.assistant.send(
             model=self._current_model(),
@@ -937,7 +908,7 @@ class PorAiWindow(Adw.ApplicationWindow):
         return False  # GLib.idle_add: não repetir
 
     def _on_usage(self, usage: Dict[str, Any]) -> bool:
-        print(f"[por-ai][debug] _on_usage recebeu: {usage!r} | streaming_row={self._streaming_row!r}")
+        logger.debug("Uso recebido: %r", usage)
         self._pending_usage = usage
         if self._streaming_row is not None:
             self._streaming_row.set_usage(
@@ -945,12 +916,59 @@ class PorAiWindow(Adw.ApplicationWindow):
             )
         return False
 
-    def _on_done(self, full_text: str) -> bool:
+    def _history_for_api(self) -> List[Dict[str, str]]:
+        """Histórico enviado ao modelo, com as planilhas antigas degradadas.
+
+        Quando a resposta do assistente traz uma planilha, `content` guarda o
+        bloco cru (a spec JSON) e `display` guarda o texto com o link
+        file://. Reenviar TODAS as specs faria o custo do histórico crescer
+        sem limite: uma tabela de 200 linhas é reenviada inteira a cada turno
+        seguinte, para sempre.
+
+        O meio-termo é reenviar cru apenas a ÚLTIMA planilha gerada e mandar
+        as anteriores como link. Isso cobre o caso real — "ajusta a planilha
+        que você acabou de fazer" — sem carregar o histórico inteiro. Pedir
+        alteração numa planilha de três turnos atrás volta a reinventá-la,
+        mas aí o usuário normalmente já pediria de novo do zero mesmo.
+
+        Só mensagens do assistente são degradadas. Nas do usuário, `content`
+        e `display` diferem por outro motivo (o texto dos anexos vai no
+        content e não na bolha), e ali o cru é sempre necessário.
+        """
+        last_raw = -1
+        for index, message in enumerate(self._messages):
+            if (
+                message["role"] == "assistant"
+                and message.get("content") != message.get("display")
+            ):
+                last_raw = index
+
+        history: List[Dict[str, str]] = []
+        for index, message in enumerate(self._messages):
+            content = message.get("content", "")
+            if message["role"] == "assistant" and index != last_raw:
+                content = message.get("display") or content
+            history.append({"role": message["role"], "content": content})
+        return history
+
+    def _on_done(self, full_text: str, raw_text: str = "") -> bool:
         if self._streaming_row is not None:
             if not full_text.strip():
                 self._streaming_row.set_text("(resposta vazia ou cancelada)")
+            else:
+                # O texto final pode ter sido reescrito pelo assistente
+                # (blocos de planilha viram links [Baixar planilha](file://)).
+                # Os deltas exibidos durante o streaming trazem a versão crua,
+                # então a bolha precisa ser substituída pelo resultado
+                # processado.
+                self._streaming_row.set_text(full_text)
             assistant_message: Dict[str, Any] = {
-                "role": "assistant", "content": full_text, "display": full_text,
+                # `content` guarda o cru (com a spec da planilha) para um
+                # eventual pedido de ajuste; `display` é o que vai na bolha.
+                # Iguais quando não houve planilha na resposta.
+                "role": "assistant",
+                "content": raw_text or full_text,
+                "display": full_text,
             }
             if self._pending_usage:
                 assistant_message["tokens"] = self._pending_usage.get("total_tokens")
@@ -1090,7 +1108,7 @@ class PorAiWindow(Adw.ApplicationWindow):
         for pattern in (
             "*.txt", "*.md", "*.markdown", "*.rst", "*.org",
             "*.tex", "*.csv", "*.log",
-            "*.pdf", "*.odt", "*.docx",
+            "*.pdf", "*.odt", "*.ods", "*.xlsx",
             "*.png", "*.jpg", "*.jpeg", "*.webp",
         ):
             doc_filter.add_pattern(pattern)
@@ -1211,22 +1229,15 @@ class PorAiWindow(Adw.ApplicationWindow):
         self._show_placeholder()
         self._set_busy(False)
 
-        def _debug_reset_focus_grab() -> bool:
-            before = self.get_focus()
-            ok = self._input_view.grab_focus()
-            after = self.get_focus()
-            print(
-                f"[DEBUG][{time.monotonic():.3f}] _reset_chat_view idle grab_focus: "
-                f"ok={ok} | foco_antes={type(before).__name__ if before else None} | "
-                f"foco_depois={type(after).__name__ if after else None}",
-                flush=True,
-            )
+        # O grab_focus precisa esperar o reset da UI terminar; feito na hora,
+        # o widget ainda não está mapeado e o foco não gruda.
+        def _grab_input_focus() -> bool:
+            self._input_view.grab_focus()
             return False
 
-        GLib.idle_add(_debug_reset_focus_grab)
+        GLib.idle_add(_grab_input_focus)
 
     def _on_new_chat(self, *_args) -> None:
-        print(f"[DEBUG][{time.monotonic():.3f}] === Nova conversa clicada ===", flush=True)
         # A conversa anterior já está salva (persistimos a cada turno), então
         # aqui só abrimos uma conversa nova e limpa.
         self._reset_chat_view()
@@ -1367,7 +1378,6 @@ class PorAiWindow(Adw.ApplicationWindow):
 
     def _on_conv_activated(self, _listbox, row: Gtk.ListBoxRow) -> None:
         conv_id = row.get_name()
-        print(f"[DEBUG] row-activated: conv_id={conv_id!r}", flush=True)
         if conv_id and conv_id != self._current_conv_id:
             self._load_conversation(conv_id)
         # Em modo recolhido, esconde a sidebar após escolher.
@@ -1426,8 +1436,6 @@ class PorAiWindow(Adw.ApplicationWindow):
         GLib.idle_add(lambda: self._input_view.grab_focus() and False)
 
     def _on_delete_conv(self, conv_id: str) -> None:
-        print(f"[DEBUG] _on_delete_conv chamado: conv_id={conv_id!r}", flush=True)
-        import traceback; traceback.print_stack()
         self.store.delete(conv_id)
         if conv_id == self._current_conv_id:
             self._reset_chat_view()
@@ -1501,13 +1509,9 @@ class PorAiWindow(Adw.ApplicationWindow):
             on_update_available=lambda release, local: GLib.idle_add(
                 self._show_update_dialog, release, local
             ),
-            # Silencioso na UI, mas registra no console para depuração.
-            on_no_update=lambda: print(
-                "[POR.ai] Verificação silenciosa: já está atualizado.", flush=True
-            ),
-            on_error=lambda msg: print(
-                f"[POR.ai] Verificação silenciosa falhou: {msg}", flush=True
-            ),
+            # Silencioso na UI, mas registrado para depuração.
+            on_no_update=lambda: logger.debug("Verificação silenciosa: já atualizado."),
+            on_error=lambda msg: logger.info("Verificação silenciosa falhou: %s", msg),
         )
         return False
 
@@ -1529,10 +1533,9 @@ class PorAiWindow(Adw.ApplicationWindow):
         )
 
     def _show_update_dialog(self, release: dict, local_version: str) -> bool:
-        print(
-            f"[POR.ai] Abrindo diálogo de atualização "
-            f"(local={local_version}, remota={release.get('tag_name')}).",
-            flush=True,
+        logger.info(
+            "Abrindo diálogo de atualização (local=%s, remota=%s).",
+            local_version, release.get("tag_name"),
         )
         if _UPDATE_AVAILABLE:
             UpdateDialog(self, release, local_version, self._updater)
@@ -1577,5 +1580,3 @@ class PorAiWindow(Adw.ApplicationWindow):
             website="https://github.com/narayanls/por-ai",
         )
         about.present()
-
-    # ------------------------------------------------------------------ #
