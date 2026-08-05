@@ -20,7 +20,7 @@ gi.require_version("Pango", "1.0")
 from gi.repository import Adw, Gdk, Gio, GLib, Gtk, Pango
 
 from ui.markup import escape_plain, md_to_pango
-from typing import Optional
+from typing import List, Optional
 
 
 class MessageRow(Gtk.Box):
@@ -160,12 +160,24 @@ class MessageRow(Gtk.Box):
         else:
             self._label.set_markup(escape_plain(text))
 
-    
-    # usa re para gerar link clicável de imagem
     _RE_A_TAG = re.compile(r"</?a\b[^>]*>")
 
     @staticmethod
     def _is_valid_markup(markup: str) -> bool:
+        """Valida o markup, ignorando as tags de link.
+
+        NÃO REMOVA o ``sub()`` abaixo. A tag ``<a href>`` é uma extensão do
+        GTK, implementada no ``gtk_label_set_markup`` — o parser do Pango
+        não a conhece e ``Pango.parse_markup`` responde "Unknown tag 'a'".
+        Validar o markup completo reprova toda mensagem que contenha um
+        link (planilha gerada, imagem gerada, URL citada pelo modelo), a
+        bolha cai no ``escape_plain`` e o link aparece como texto cru.
+
+        A contrapartida é que um href malformado não seria detectado aqui.
+        Isso é coberto na origem: ``md_to_pango`` extrai os links para
+        placeholder antes das regras de inline e escapa a URL ao montar o
+        anchor, então o href não tem como chegar corrompido.
+        """
         stripped = MessageRow._RE_A_TAG.sub("", markup)
         try:
             Pango.parse_markup(stripped, -1, "\0")

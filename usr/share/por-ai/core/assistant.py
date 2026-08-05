@@ -2,15 +2,22 @@
 Coordenador de chat do POR.ai.
 
 Formatos de texto suportados (enviados como bloco na mensagem):
-  txt, md, rst, org, tex, csv, log, pdf, odt
+  txt, md, rst, org, tex, csv, log, pdf, odt, ods, xlsx
 
 Formatos de imagem suportados (enviados como base64 multimodal):
   jpg, jpeg, png, webp
+
+Planilhas geradas pelo modelo: blocos ```ods e ```xlsx (JSON com dados e
+estilo) viram planilhas formatadas; blocos ```csv viram .csv sem
+formatação. Em todos os casos o bloco é trocado por um link file://
+clicável. ODS é o formato pedido no system prompt; xlsx só quando o
+usuário pede Excel explicitamente.
 """
 
 from __future__ import annotations
 
 import base64
+import json
 import logging
 import mimetypes
 import os
@@ -40,6 +47,20 @@ try:
 except ImportError:
     ODT_AVAILABLE = False
 
+# openpyxl é tratado como opcional pelo mesmo motivo dos anteriores: se o
+# pacote faltar na máquina do usuário, o app continua funcionando em vez de
+# quebrar no import. Aqui a flag governa apenas a LEITURA de anexos .xlsx —
+# a geração é decidida por `available_formats()`, que consulta os dois
+# backends (odfpy e openpyxl) de forma independente.
+try:
+    from openpyxl import load_workbook
+    XLSX_AVAILABLE = True
+except ImportError:
+    XLSX_AVAILABLE = False
+
+# sheet_gen não tem dependência dura: cada backend se autodetecta lá dentro,
+# então o import nunca falha por falta de odfpy ou openpyxl.
+from core.sheet_gen import SheetSpecError, available_formats, build_sheet
 
 
 # ── Extensões suportadas ──────────────────────────────────────────────────────
@@ -234,7 +255,10 @@ class ChatAssistant:
         model: str,
         messages: List[Any],
         on_delta: Callable[[str], None],
-        on_done: Callable[[str], None],
+        # on_done(display, raw): `display` é o texto com os blocos de planilha
+        # já trocados por links; `raw` é o texto original do modelo, com os
+        # blocos intactos. São iguais quando não houve planilha na resposta.
+        on_done: Callable[[str, str], None],
         on_error: Callable[[str], None],
         on_usage: Optional[Callable[[Dict[str, Any]], None]] = None,
     ) -> bool:
@@ -256,7 +280,10 @@ class ChatAssistant:
         model: str,
         messages: List[Any],
         on_delta: Callable[[str], None],
-        on_done: Callable[[str], None],
+        # on_done(display, raw): `display` é o texto com os blocos de planilha
+        # já trocados por links; `raw` é o texto original do modelo, com os
+        # blocos intactos. São iguais quando não houve planilha na resposta.
+        on_done: Callable[[str, str], None],
         on_error: Callable[[str], None],
         on_usage: Optional[Callable[[Dict[str, Any]], None]] = None,
     ) -> None:
@@ -297,14 +324,28 @@ class ChatAssistant:
             if images:
                 markdown_links = self._save_generated_images(images)
                 if markdown_links:
-                    extra = ("\n\n" if full.strip() else "") + markdown_links
-                    full += extra
-                    GLib.idle_add(on_delta, extra)
+                    # Nome próprio: `extra` acima é o dict de kwargs da API.
+                    suffix = ("\n\n" if full.strip() else "") + markdown_links
+                    full += suffix
+                    GLib.idle_add(on_delta, suffix)
+
+            # Blocos ```ods / ```xlsx / ```csv viram arquivos locais + link
+            # clicável. Roda depois do streaming, então a bolha ainda mostra
+            # o bloco cru — o `on_done` substitui o texto pela versão
+            # processada.
+            #
+            # O texto ANTES da conversão é devolvido junto: é o que permite a
+            # janela reenviar a spec ao modelo num pedido de ajuste ("troca a
+            # cor", "adiciona uma coluna"). Sem ele o histórico só teria o
+            # link file://, e o modelo reinventaria a planilha do zero.
+            display = full
+            if full:
+                display = ChatAssistant._save_generated_spreadsheets(full)
 
             if usage and on_usage is not None:
                 GLib.idle_add(on_usage, usage)
 
-            GLib.idle_add(on_done, full)
+            GLib.idle_add(on_done, display, full)
         except OpenRouterError as exc:
             GLib.idle_add(on_error, str(exc))
         except Exception as exc:  # pylint: disable=broad-except
@@ -362,7 +403,10 @@ class ChatAssistant:
             return PDF_AVAILABLE
         if ext == ".odt":
             return ODT_AVAILABLE
-        
+        if ext == ".ods":
+            return ODT_AVAILABLE
+        if ext == ".xlsx":
+            return XLSX_AVAILABLE
         return False
 
     @staticmethod
@@ -372,18 +416,26 @@ class ChatAssistant:
             return "Instale python3-pypdf para anexar PDFs."
         if ext == ".odt" and not ODT_AVAILABLE:
             return "Instale python3-odfpy para anexar arquivos ODT."
-        
+        if ext == ".ods" and not ODT_AVAILABLE:
+            return "Instale python3-odfpy para anexar arquivos ODS."
+        if ext == ".xlsx" and not XLSX_AVAILABLE:
+            return "Instale python3-openpyxl para anexar arquivos XLSX."
+        if ext == ".docx":
+            return "Arquivos .docx não são suportados. Converta para .odt ou .txt."
         return "Tipo de arquivo não suportado."
 
     @staticmethod
     def read_text_attachment(path: str) -> str:
-        """Extrai texto de documentos (PDF, ODT, texto puro)."""
+        """Extrai texto de documentos (PDF, ODT, ODS, XLSX, texto puro)."""
         ext = os.path.splitext(path)[1].lower()
         if ext == ".pdf":
             return ChatAssistant._read_pdf(path)
         if ext == ".odt":
             return ChatAssistant._read_odt(path)
-        
+        if ext == ".ods":
+            return ChatAssistant._read_ods(path)
+        if ext == ".xlsx":
+            return ChatAssistant._read_xlsx(path)
         try:
             with open(path, "r", encoding="utf-8", errors="replace") as f:
                 return f.read()
@@ -449,6 +501,24 @@ class ChatAssistant:
 
     _RE_DATA_URI = re.compile(r"^data:([^;]+);base64,(.+)$", re.DOTALL)
 
+    # Blocos de planilha gerados pelo modelo.
+    #
+    # O group(1) é o formato (ods/xlsx) e o group(2) é o JSON — o formato
+    # vem da cerca porque é assim que o modelo sinaliza a escolha pedida no
+    # system prompt, sem precisar de mais uma chave dentro da spec.
+    #
+    # O `[ \t]*` tolera espaço em volta do nome da linguagem e o `\r?` cobre
+    # quebra de linha estilo Windows. O `(?:```|\Z)` no fim aceita bloco sem
+    # cerca de fechamento: modelos esquecem de fechar com frequência quando
+    # o bloco é a última coisa da resposta, e sem essa tolerância o JSON
+    # inteiro vazaria cru para a bolha.
+    _RE_SHEET_BLOCK = re.compile(
+        r"```[ \t]*(ods|xlsx)[ \t]*\r?\n(.*?)(?:```|\Z)", re.DOTALL | re.IGNORECASE
+    )
+    _RE_CSV_BLOCK = re.compile(
+        r"```[ \t]*csv[ \t]*\r?\n(.*?)(?:```|\Z)", re.DOTALL | re.IGNORECASE
+    )
+
     @staticmethod
     def _save_generated_images(image_urls: List[str]) -> str:
         """Salva imagens geradas pelo modelo (data URIs base64) em disco e
@@ -487,6 +557,93 @@ class ChatAssistant:
                 continue
             links.append(f"[Imagem gerada]({GLib.filename_to_uri(path, None)})")
         return "\n".join(links)
+
+    @staticmethod
+    def _spreadsheets_dir() -> Optional[str]:
+        """Cria (se preciso) e devolve o diretório das planilhas geradas.
+        Devolve None se não for possível criar — o chamador então deixa a
+        resposta intacta."""
+        path = os.path.join(GLib.get_user_data_dir(), "por-ai", "spreadsheets")
+        try:
+            os.makedirs(path, exist_ok=True)
+        except OSError as exc:
+            logger.warning("Não foi possível criar %s: %s", path, exc)
+            return None
+        return path
+
+    @staticmethod
+    def _save_generated_spreadsheets(text: str) -> str:
+        """Converte blocos de planilha da resposta em arquivos locais.
+
+        Três formatos são aceitos:
+
+        * ```ods — JSON com dados e estilo, gera .ods formatado (cores,
+          negrito, larguras). É o formato pedido no system prompt.
+        * ```xlsx — mesma spec, saída em .xlsx. O system prompt só pede
+          este quando o usuário menciona Excel explicitamente.
+        * ```csv — texto puro, gera .csv sem formatação. Mantido porque
+          nem todo modelo segue a instrução, e é melhor entregar uma
+          planilha sem cor do que não entregar nada.
+
+        Quando um bloco não pode ser convertido — JSON malformado, spec sem
+        colunas, nenhum backend instalado, erro de escrita — o bloco
+        original é preservado na resposta. Sumir com os dados do usuário
+        por causa de uma falha de conversão seria pior do que mostrá-los
+        crus.
+        """
+        directory = ChatAssistant._spreadsheets_dir()
+        if directory is None:
+            return text
+
+        def _save_sheet(match: re.Match) -> str:
+            formats = available_formats()
+            if not formats:
+                return match.group(0)
+
+            fmt = match.group(1).lower()
+            raw = match.group(2).strip()
+            if not raw:
+                return match.group(0)
+            try:
+                spec = json.loads(raw)
+            except json.JSONDecodeError as exc:
+                logger.info("Bloco de planilha com JSON inválido: %s", exc)
+                return match.group(0)
+            if not isinstance(spec, dict):
+                return match.group(0)
+
+            # Se o backend do formato pedido não existe, entrega no outro em
+            # vez de devolver JSON cru: planilha no formato "errado" ainda é
+            # uma planilha, e o usuário converte em dois cliques.
+            if fmt not in formats:
+                logger.info("Backend %s ausente, gerando em %s", fmt, formats[0])
+                fmt = formats[0]
+
+            path = os.path.join(directory, f"{uuid.uuid4().hex}.{fmt}")
+            try:
+                build_sheet(spec, path, fmt)
+            except (SheetSpecError, OSError, ValueError) as exc:
+                logger.info("Falha ao gerar planilha: %s", exc)
+                return match.group(0)
+            uri = GLib.filename_to_uri(path, None)
+            return f"[Baixar planilha (.{fmt})]({uri})"
+
+        def _save_csv(match: re.Match) -> str:
+            content = match.group(1).strip()
+            if not content:
+                return match.group(0)
+            path = os.path.join(directory, f"{uuid.uuid4().hex}.csv")
+            try:
+                with open(path, "w", encoding="utf-8", newline="") as handle:
+                    handle.write(content)
+            except OSError as exc:
+                logger.info("Falha ao gravar planilha csv: %s", exc)
+                return match.group(0)
+            uri = GLib.filename_to_uri(path, None)
+            return f"[Baixar planilha (.csv)]({uri})"
+
+        text = ChatAssistant._RE_SHEET_BLOCK.sub(_save_sheet, text)
+        return ChatAssistant._RE_CSV_BLOCK.sub(_save_csv, text)
 
     # ------------------------------------------------------------------ #
     # Leitores específicos                                                 #
@@ -529,11 +686,51 @@ class ChatAssistant:
             raise RuntimeError(f"Erro ao ler ODT: {exc}") from exc
 
     @staticmethod
-    def _read_docx(path: str) -> str:
-        if not DOCX_AVAILABLE:
-            raise RuntimeError("Instale python3-docx para ler DOCX.")
+    def _read_ods(path: str) -> str:
+        if not ODT_AVAILABLE:
+            raise RuntimeError("Instale python3-odfpy para ler arquivos ODS.")
         try:
-            doc = DocxDocument(path)
-            return "\n".join(p.text for p in doc.paragraphs)
+            from odf.table import Table, TableRow, TableCell
+            doc = odf_load(path)
+            lines = []
+            for table in doc.getElementsByType(Table):
+                for row in table.getElementsByType(TableRow):
+                    cells = []
+                    for cell in row.getElementsByType(TableCell):
+                        text = "".join(
+                            node.data
+                            for node in cell.childNodes
+                            if node.nodeType == node.TEXT_NODE
+                        )
+                        cells.append(text)
+                    lines.append("\t".join(cells))
+            return "\n".join(lines)
         except Exception as exc:
-            raise RuntimeError(f"Erro ao ler DOCX: {exc}") from exc
+            raise RuntimeError(f"Erro ao ler ODS: {exc}") from exc
+
+    @staticmethod
+    def _read_xlsx(path: str) -> str:
+        """Lê uma planilha .xlsx como texto tabulado, uma linha por linha da
+        planilha. ``data_only=True`` traz o resultado das fórmulas em vez da
+        fórmula em si — é o que interessa ao modelo."""
+        if not XLSX_AVAILABLE:
+            raise RuntimeError("Instale python3-openpyxl para ler arquivos XLSX.")
+        try:
+            workbook = load_workbook(path, data_only=True, read_only=True)
+            blocks = []
+            for sheet in workbook.worksheets:
+                lines = []
+                for row in sheet.iter_rows(values_only=True):
+                    if row is None:
+                        continue
+                    cells = ["" if value is None else str(value) for value in row]
+                    if any(cell.strip() for cell in cells):
+                        lines.append("\t".join(cells))
+                if lines:
+                    blocks.append(f"# {sheet.title}\n" + "\n".join(lines))
+            workbook.close()
+        except Exception as exc:
+            raise RuntimeError(f"Erro ao ler XLSX: {exc}") from exc
+        if not blocks:
+            raise RuntimeError("A planilha está vazia.")
+        return "\n\n".join(blocks)
