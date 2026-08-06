@@ -28,78 +28,20 @@ from ui.window import PorAiWindow
 
 logger = logging.getLogger(__name__)
 
-# --------------------------------------------------------------------- #
-# Método de entrada (acentos e dead keys)                                #
-# --------------------------------------------------------------------- #
-#
-# A partir do GTK 4.19 o suporte a método de entrada no Wayland é delegado
-# ao protocolo de texto do compositor, e o GTK deixou de fazer compose e
-# dead keys do lado do cliente. Compositores wlroots (niri, Hyprland, sway…)
-# não implementam esse protocolo, então em uma sessão sem IME rodando os
-# acentos simplesmente param de funcionar. Nesses casos forçamos o módulo
-# "simple", que traz de volta a implementação de compose do próprio GTK.
-#
-# Nunca usar "xim": não é suportado pelo GTK4 e faz teclas de edição serem
-# entregues como texto bruto.
-#
-# Solução completa e recomendada pelo GTK: ter ibus ou fcitx5 ativo na
-# sessão. O "simple" é a implementação ingênua — cobre o português bem, mas
-# não substitui um IME de verdade.
+# Identifica o ambiente gráfico e o tipo de sessão
+current_desktop = os.environ.get('XDG_CURRENT_DESKTOP', '')
+session_type = os.environ.get('XDG_SESSION_TYPE', '').lower()
 
-_NO_TEXT_INPUT_PROTOCOL = {"Hyprland", "niri", "sway", "Wayfire", "river"}
-
-
-def _configure_im_module() -> None:
-    """Define GTK_IM_MODULE apenas quando o ambiente exige.
-
-    Deve rodar antes de qualquer widget ser criado. Idempotente e
-    conservador: nunca sobrescreve uma escolha explícita do usuário, exceto
-    o valor quebrado "xim".
-
-    Escape hatch para depuração ou para quem tem um setup específico::
-
-        POR_AI_IM_MODULE=ibus por-ai     # força um módulo
-        POR_AI_IM_MODULE= por-ai         # não mexe em nada
-    """
-    override = os.environ.get("POR_AI_IM_MODULE")
-    if override is not None:
-        if override:
-            os.environ["GTK_IM_MODULE"] = override
-            logger.info("GTK_IM_MODULE=%r forçado via POR_AI_IM_MODULE.", override)
-        else:
-            os.environ.pop("GTK_IM_MODULE", None)
-            logger.info("GTK_IM_MODULE removido via POR_AI_IM_MODULE vazio.")
-        return
-
-    current = os.environ.get("GTK_IM_MODULE", "").strip()
-
-    if current == "xim":
-        os.environ["GTK_IM_MODULE"] = "simple"
-        logger.info("GTK_IM_MODULE=xim não é suportado no GTK4; usando 'simple'.")
-        return
-
-    if current:
-        # ibus, fcitx, wayland… escolha explícita do usuário ou do ambiente.
-        logger.debug("GTK_IM_MODULE já definido como %r; mantido.", current)
-        return
-
-    # Se há um IME de verdade ativo, o GTK conversa com ele — não interferir.
-    if any(k in os.environ.get("XMODIFIERS", "") for k in ("ibus", "fcitx")):
-        logger.debug("IME detectado em XMODIFIERS; GTK_IM_MODULE não alterado.")
-        return
-
-    desktops = os.environ.get("XDG_CURRENT_DESKTOP", "").split(":")
-    session = os.environ.get("XDG_SESSION_TYPE", "").lower()
-    if session == "wayland" and any(d in _NO_TEXT_INPUT_PROTOCOL for d in desktops):
-        os.environ["GTK_IM_MODULE"] = "simple"
-        logger.info(
-            "Compositor sem protocolo de texto (%s); GTK_IM_MODULE=simple "
-            "para manter acentos funcionando.",
-            ":".join(d for d in desktops if d),
-        )
-
-
-_configure_im_module()
+# Fix for dead keys/accents in different Desktop Environments
+if current_desktop in ('Hyprland', 'niri'):
+    os.environ.setdefault('GTK_IM_MODULE', 'gtk-im-context-simple')
+elif current_desktop == 'KDE':
+    if session_type == 'wayland':
+        # KDE Plasma 6+ (Wayland default)
+        os.environ.setdefault('GTK_IM_MODULE', 'gtk-im-context-simple')
+    else:
+        # Legacy KDE Plasma (X11)
+        os.environ.setdefault('GTK_IM_MODULE', 'xim')
 
 APPLICATION_ID = "io.github.narayanls.PorAi"
 

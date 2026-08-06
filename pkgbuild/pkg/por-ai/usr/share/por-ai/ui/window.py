@@ -460,7 +460,6 @@ class PorAiWindow(Adw.ApplicationWindow):
         self._input_view.add_controller(text_file_drop)
 
         key_controller = Gtk.EventControllerKey()
-        key_controller.set_propagation_phase(Gtk.PropagationPhase.CAPTURE)
         key_controller.connect("key-pressed", self._on_input_key)
         self._input_view.add_controller(key_controller)
 
@@ -763,30 +762,11 @@ class PorAiWindow(Adw.ApplicationWindow):
     # ------------------------------------------------------------------ #
 
     def _on_input_key(self, _controller, keyval, _keycode, state) -> bool:
+        is_enter = keyval in (Gdk.KEY_Return, Gdk.KEY_KP_Enter, Gdk.KEY_ISO_Enter)
         shift = bool(state & Gdk.ModifierType.SHIFT_MASK)
-        ctrl = bool(state & Gdk.ModifierType.CONTROL_MASK)
-
-        if keyval in (Gdk.KEY_Return, Gdk.KEY_KP_Enter, Gdk.KEY_ISO_Enter) and not shift:
+        if is_enter and not shift:
             self._on_send_clicked(self._send_button)
-            return True
-
-        # O módulo de entrada "simple" (necessário no niri para acentos) entrega
-        # Delete como texto em vez de comando de edição. Tratamos aqui, em fase
-        # CAPTURE, para que a tecla nunca chegue ao IM.
-        if keyval in (Gdk.KEY_Delete, Gdk.KEY_KP_Delete):
-            buffer = self._input_view.get_buffer()
-            logger.warning(
-                "DELETE: editable=%s sel=%s offset=%s chars=%s buffer=%s",
-                self._input_view.get_editable(),
-                buffer.get_has_selection(),
-                buffer.get_iter_at_mark(buffer.get_insert()).get_offset(),
-                buffer.get_char_count(),
-                type(buffer).__name__,
-            )
-            delete_type = Gtk.DeleteType.WORD_ENDS if ctrl else Gtk.DeleteType.CHARS
-            self._input_view.emit("delete-from-cursor", delete_type, 1)
-            return True
-
+            return True  # consome o Enter (não insere quebra de linha)
         return False
 
     def _get_input_text(self) -> str:
