@@ -1,0 +1,3 @@
+#!/bin/sh
+# Lançador do POR.ai.
+exec python3 /usr/share/por-ai/main.py "$@"
