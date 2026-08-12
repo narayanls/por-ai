@@ -64,7 +64,7 @@ except Exception as _exc:  # pylint: disable=broad-except
 
 # Versão embutida do app — fonte única, usada na janela "Sobre" e como
 # fallback do verificador de updates quando o version.txt não existe.
-APP_VERSION = "0.1.8.7"
+APP_VERSION = "0.1.8.8"
 
 _CSS = b"""
 .message-bubble {
@@ -494,14 +494,29 @@ class PorAiWindow(Adw.ApplicationWindow):
         outer.append(row)
         return outer
 
-    def _apply_source_style_scheme(self) -> None:
+    def _apply_source_style_scheme(self, scheme_id: Optional[str] = None) -> None:
         """Escolhe um style scheme do GtkSource que combine com o tema.
 
-        Sem isso o fundo do input fica branco mesmo no modo escuro. Tenta
-        esquemas escuros conhecidos e cai para qualquer disponível.
+        Sem isso o fundo do input fica branco mesmo no modo escuro. Se há um
+        esquema de cores do POR.ai ativo (não "sistema"), gera e usa um
+        scheme casado com a paleta escolhida — senão cai para os esquemas
+        padrão do GtkSource, escolhidos pelo modo claro/escuro do sistema.
+
+        `scheme_id`, se informado, tem prioridade sobre o valor salvo na
+        config — importante ao trocar de tema, quando esta função pode ser
+        chamada antes do `config.set()`/`config.save()` terem rodado.
         """
         if not _HAS_SOURCEVIEW:
             return
+
+        if scheme_id is None:
+            scheme_id = self.config.get("color_scheme", color_schemes.SYSTEM_SCHEME_ID)
+        if scheme_id and scheme_id != color_schemes.SYSTEM_SCHEME_ID:
+            custom_scheme = self._install_custom_source_scheme(scheme_id)
+            if custom_scheme is not None:
+                self._input_view.get_buffer().set_style_scheme(custom_scheme)
+                return
+
         try:
             manager = GtkSource.StyleSchemeManager.get_default()
             is_dark = Adw.StyleManager.get_default().get_dark()
@@ -520,6 +535,38 @@ class PorAiWindow(Adw.ApplicationWindow):
                 self._input_view.get_buffer().set_style_scheme(scheme)
         except Exception as exc:  # noqa: BLE001
             logger.debug("Esquema de estilo indisponível: %r", exc)
+
+    def _install_custom_source_scheme(self, scheme_id: str):
+        """Grava (se preciso) e retorna o GtkSource.StyleScheme do esquema
+        de cores `scheme_id`, ou None se algo falhar."""
+        if not _HAS_SOURCEVIEW:
+            return None
+        xml = color_schemes.build_sourceview_scheme_xml(scheme_id)
+        if xml is None:
+            return None
+        try:
+            schemes_dir = os.path.join(
+                GLib.get_user_cache_dir(), "por-ai", "gtksourceview-schemes"
+            )
+            os.makedirs(schemes_dir, exist_ok=True)
+            gtk_scheme_id = color_schemes.sourceview_scheme_id(scheme_id)
+            path = os.path.join(schemes_dir, f"{gtk_scheme_id}.xml")
+            with open(path, "w", encoding="utf-8") as handle:
+                handle.write(xml)
+
+            manager = GtkSource.StyleSchemeManager.get_default()
+            if schemes_dir not in manager.get_search_path():
+                manager.append_search_path(schemes_dir)
+            # Sempre reescaneia: o arquivo que acabamos de gravar pode ser
+            # novo (tema nunca usado nesta sessão) e o manager só enxerga
+            # arquivos presentes da última vez que escaneou o diretório —
+            # sem isso, o esquema recém-escrito não é encontrado e o campo
+            # de entrada cai no scheme padrão (preto) até reiniciar o app.
+            manager.force_rescan()
+            return manager.get_scheme(gtk_scheme_id)
+        except Exception as exc:  # noqa: BLE001
+            logger.debug("Falha ao instalar style scheme personalizado: %r", exc)
+            return None
 
     def _on_input_right_click(self, gesture, _n_press, x, y) -> None:
         """Posiciona o caret sob o ponteiro no clique direito.
@@ -1587,6 +1634,13 @@ class PorAiWindow(Adw.ApplicationWindow):
             Gtk.StyleContext.remove_provider_for_display(display, self._scheme_provider)
             self._scheme_provider = None
         self._scheme_provider = color_schemes.apply_scheme(display, scheme_id)
+        # Sincroniza o fundo do campo de entrada (GtkSourceView tem scheme
+        # próprio, que não segue @view_bg_color/@card_bg_color via CSS).
+        # Passamos scheme_id explicitamente: neste ponto o config ainda pode
+        # não ter sido salvo (ver _on_scheme_selected), então não dá para
+        # confiar no valor persistido.
+        if hasattr(self, "_input_view"):
+            self._apply_source_style_scheme(scheme_id)
 
     def _on_color_scheme(self, *_args) -> None:
         current = self.config.get("color_scheme", color_schemes.SYSTEM_SCHEME_ID)
@@ -1596,9 +1650,9 @@ class PorAiWindow(Adw.ApplicationWindow):
         theme_win.present()
 
     def _on_scheme_selected(self, scheme_id: str) -> None:
-        self._apply_color_scheme(scheme_id)
         self.config.set("color_scheme", scheme_id)
         self.config.save()
+        self._apply_color_scheme(scheme_id)
 
     def _prompt_for_api_key(self) -> bool:
         """Abre as Preferências pedindo a chave da API na primeira execução
