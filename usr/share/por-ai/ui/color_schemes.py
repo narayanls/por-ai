@@ -70,8 +70,8 @@ THEMES: Dict[str, Dict] = {
         "bg_dim": "#21222c",
         "surface": "#343746",
         "fg": "#f8f8f2",
-        "accent": "#bd93f9",
-        "accent_fg": "#282a36",
+        "accent": "#9932CC",
+        "accent_fg": "#DDA0DD",
         "border": "#44475a",
     },
     "nord": {
@@ -102,7 +102,77 @@ THEMES: Dict[str, Dict] = {
         "fg": "#4a3b3f",
         "accent": "#d1667c",
         "accent_fg": "#fef7f9",
-        "border": "#eccdd6",
+        "border": "#8c7179",
+    },
+    "solarized-light": {
+        "label": "Solarized Light",
+        "bg": "#fdf6e3",
+        "bg_dim": "#eee8d5",
+        "surface": "#eee8d5",
+        "fg": "#657b83",
+        "accent": "#008080",
+        "accent_fg": "#fdf6e3",
+        "border": "#93a1a1",
+    },
+    "rose-pine-dawn": {
+        "label": "Rosé Pine Dawn",
+        "bg": "#faf4ed",
+        "bg_dim": "#f4ede8",
+        "surface": "#fffaf3",
+        "fg": "#575279",
+        "accent": "#b4637a",
+        "accent_fg": "#faf4ed",
+        "border": "#dfdad9",
+    },
+    "one-light": {
+        "label": "One Light",
+        "bg": "#fafafa",
+        "bg_dim": "#f0f0f1",
+        "surface": "#ffffff",
+        "fg": "#383a42",
+        "accent": "#4078f2",
+        "accent_fg": "#fafafa",
+        "border": "#e5e5e6",
+    },
+    "eldritch": {
+        "label": "Eldritch",
+        "bg": "#020310",
+        "bg_dim": "#1a1c2c",
+        "surface": "#323449",
+        "fg": "#ebfafa",
+        "accent": "#37f499",
+        "accent_fg": "#212337",
+        "border": "#454759",
+    },
+    "heartbox": {
+        "label": "Heartbox",
+        "bg": "#2b1620",
+        "bg_dim": "#1f1017",
+        "surface": "#3d1f2b",
+        "fg": "#f5dde2",
+        "accent": "#ff6f91",
+        "accent_fg": "#2b1620",
+        "border": "#52293a",
+    },
+    "doomed": {
+        "label": "Doomed",
+        "bg": "#120d0d",
+        "bg_dim": "#0a0707",
+        "surface": "#241616",
+        "fg": "#e8d9d0",
+        "accent": "#c1121f",
+        "accent_fg": "#120d0d",
+        "border": "#3a1f1f",
+    },
+    "ant": {
+        "label": "Ant",
+        "bg": "#161311",
+        "bg_dim": "#0d0b0a",
+        "surface": "#231e1a",
+        "fg": "#e4d9cd",
+        "accent": "#d2691e",
+        "accent_fg": "#161311",
+        "border": "#332a22",
     },
 }
 
@@ -130,6 +200,52 @@ def scheme_swatches(scheme_id: str) -> List[str]:
     if not theme:
         return []
     return [theme["bg"], theme["surface"], theme["accent"]]
+
+
+def sourceview_scheme_id(scheme_id: str) -> str:
+    """Id usado para registrar/consultar o style scheme do GtkSourceView
+    correspondente a este esquema de cores."""
+    return f"porai-{scheme_id}"
+
+
+def build_sourceview_scheme_xml(scheme_id: str) -> Optional[str]:
+    """XML de um GtkSource.StyleScheme casado com o esquema `scheme_id`.
+
+    O campo de entrada usa GtkSource.View (exigido pela libspelling para o
+    sublinhado do corretor ortográfico), que tem seu próprio sistema de
+    cores — completamente à parte das cores nomeadas do GTK/libadwaita.
+    Sem isso, o fundo do campo de texto fica preso num claro/escuro fixo do
+    GtkSourceView, ignorando o esquema de cores escolhido no app. Retorna
+    None para o tema do sistema (usa os schemes padrão do GtkSourceView).
+    """
+    theme = THEMES.get(scheme_id)
+    if theme is None:
+        return None
+
+    bg = theme["surface"]
+    fg = theme["fg"]
+    accent = theme["accent"]
+    accent_fg = theme["accent_fg"]
+    label = theme["label"]
+    gtk_id = sourceview_scheme_id(scheme_id)
+
+    return f"""<?xml version="1.0" encoding="UTF-8"?>
+<style-scheme id="{gtk_id}" name="POR.ai — {label}" version="1.0">
+  <author>POR.ai</author>
+  <_description>Esquema gerado a partir do tema &quot;{label}&quot; do POR.ai.</_description>
+  <style name="text" foreground="{fg}" background="{bg}"/>
+  <style name="selection" foreground="{accent_fg}" background="{accent}"/>
+  <style name="selection-unfocused" foreground="{accent_fg}" background="{accent}"/>
+  <style name="cursor" foreground="{fg}"/>
+  <style name="secondary-cursor" foreground="{fg}"/>
+  <style name="current-line" background="{bg}"/>
+  <style name="current-line-number" foreground="{fg}" background="{bg}"/>
+  <style name="line-numbers" foreground="{fg}" background="{bg}"/>
+  <style name="draw-spaces" foreground="{fg}"/>
+  <style name="background-pattern" background="{bg}"/>
+  <style name="right-margin" foreground="{fg}" background="{bg}"/>
+</style-scheme>
+"""
 
 
 def _expand(colors: Dict[str, str]) -> Dict[str, str]:
