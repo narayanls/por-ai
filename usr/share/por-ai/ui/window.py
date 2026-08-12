@@ -49,6 +49,8 @@ from core.config import Config
 from core.storage import ConversationStore
 from ui.message_row import MessageRow
 from ui.preferences import PreferencesWindow
+from ui import color_schemes
+from ui.theme_window import ThemeWindow
 
 logger = logging.getLogger(__name__)
 
@@ -112,6 +114,8 @@ class PorAiWindow(Adw.ApplicationWindow):
         # Bolha do assistente em construção durante o streaming.
         self._streaming_row: Optional[MessageRow] = None
         self._pending_usage: Optional[Dict[str, Any]] = None
+        # Provider CSS do esquema de cores ativo (None = tema do sistema).
+        self._scheme_provider: Optional[Gtk.CssProvider] = None
         self.connect("close-request", self._on_close_request)
 
 
@@ -119,6 +123,9 @@ class PorAiWindow(Adw.ApplicationWindow):
         self.set_default_size(720, 720)
 
         self._install_css()
+        self._apply_color_scheme(
+            self.config.get("color_scheme", color_schemes.SYSTEM_SCHEME_ID)
+        )
         self._install_actions()
         self._build_ui()
 
@@ -159,6 +166,7 @@ class PorAiWindow(Adw.ApplicationWindow):
             "new-chat": self._on_new_chat,
             "refresh-models": self._on_refresh_models,
             "preferences": self._on_preferences,
+            "color-scheme": self._on_color_scheme,
             "about": self._on_about,
             "check-update": self._on_check_update,
         }
@@ -255,6 +263,7 @@ class PorAiWindow(Adw.ApplicationWindow):
         menu.append("Nova conversa", "win.new-chat")
         menu.append("Atualizar modelos do OpenRouter", "win.refresh-models")
         menu.append("Preferências", "win.preferences")
+        menu.append("Temas", "win.color-scheme")
         menu.append("Sobre o POR.ai", "win.about")
         menu.append("Verificar atualizações", "win.check-update")
 
@@ -1564,6 +1573,32 @@ class PorAiWindow(Adw.ApplicationWindow):
     def _on_preferences(self, *_args) -> None:
         prefs = PreferencesWindow(self, self.config, on_saved=self._on_prefs_saved)
         prefs.present()
+
+    # ------------------------------------------------------------------ #
+    # Esquema de cores                                                      #
+    # ------------------------------------------------------------------ #
+
+    def _apply_color_scheme(self, scheme_id: str) -> None:
+        """Instala o CSS do esquema escolhido, substituindo o anterior."""
+        display = Gdk.Display.get_default()
+        if display is None:
+            return
+        if self._scheme_provider is not None:
+            Gtk.StyleContext.remove_provider_for_display(display, self._scheme_provider)
+            self._scheme_provider = None
+        self._scheme_provider = color_schemes.apply_scheme(display, scheme_id)
+
+    def _on_color_scheme(self, *_args) -> None:
+        current = self.config.get("color_scheme", color_schemes.SYSTEM_SCHEME_ID)
+        theme_win = ThemeWindow(
+            self, self.config, current, on_selected=self._on_scheme_selected
+        )
+        theme_win.present()
+
+    def _on_scheme_selected(self, scheme_id: str) -> None:
+        self._apply_color_scheme(scheme_id)
+        self.config.set("color_scheme", scheme_id)
+        self.config.save()
 
     def _prompt_for_api_key(self) -> bool:
         """Abre as Preferências pedindo a chave da API na primeira execução
