@@ -17,8 +17,12 @@ vice-versa. O chamador consulta ``available_formats()`` antes de decidir.
 
 from __future__ import annotations
 
+import io
+import logging
 import re
-from typing import Any, Dict, List, Sequence, Tuple
+from typing import Any, Dict, List, Optional, Sequence, Tuple
+
+logger = logging.getLogger(__name__)
 
 # ── Backends opcionais ───────────────────────────────────────────────────────
 
@@ -41,9 +45,15 @@ try:
     )
     from odf.table import Table, TableCell, TableColumn, TableRow
     from odf.text import P
+    from odf.draw import Frame as DrawFrame, Image as DrawImage
     ODS_BACKEND = True
 except ImportError:
     ODS_BACKEND = False
+
+# Gráfico é opcional e independente dos backends de planilha: sem
+# matplotlib, os dois formatos continuam gerando normalmente, só sem a
+# imagem do gráfico embutida.
+from core import chart_gen
 
 
 # ── Estilo de fallback ───────────────────────────────────────────────────────
@@ -90,6 +100,74 @@ def available_formats() -> Tuple[str, ...]:
     return tuple(formats)
 
 
+def chart_available() -> bool:
+    """True se matplotlib está instalado e gráficos podem ser embutidos."""
+    return chart_gen.CHART_BACKEND
+
+
+def capabilities_prompt() -> str:
+    """Texto a acrescentar ao system prompt, descrevendo o que este
+    ambiente sabe gerar agora mesmo.
+
+    É montado em runtime (não é texto fixo em config.py) de propósito:
+    reflete exatamente os backends instalados nesta máquina, e o usuário
+    pode editar o system_prompt em Preferências sem correr o risco de
+    apagar ou desalinhar as instruções de formato. Se nenhum backend de
+    planilha estiver disponível, devolve string vazia — nesse caso o
+    modelo nunca é instruído a produzir blocos que ninguém vai converter.
+    """
+    formats = available_formats()
+    if not formats:
+        return ""
+
+    preferred = formats[0]  # ods, se disponível — ver comentário no topo do arquivo
+    lines = [
+        "Ao gerar uma planilha para o usuário, produza um bloco de código "
+        f"cercado com ```{preferred} (ou ```xlsx apenas se o usuário pedir "
+        "Excel explicitamente) contendo APENAS um JSON válido, sem texto "
+        "fora da cerca, no formato:",
+        '{"sheet_name": "...", "columns": ["Col1", "Col2", ...], '
+        '"rows": [[v1, v2, ...], ...], "style": {"header_bg": "RRGGBB", ...}}',
+        "'style' é opcional (cores em hex sem #: header_bg, header_fg, "
+        "row_bg, alt_row_bg, row_fg, border). Números devem ir como number "
+        "JSON, não como string, para a planilha reconhecer a coluna como "
+        "numérica.",
+    ]
+    if "xlsx" not in formats:
+        lines.append("Não gere blocos ```xlsx nesta instalação: apenas ```ods está disponível.")
+    elif "ods" not in formats:
+        lines.append("Não gere blocos ```ods nesta instalação: apenas ```xlsx está disponível.")
+
+    if chart_available():
+        lines.append(
+            "Se o usuário pedir um gráfico junto com a planilha (ou dados "
+            "que claramente pedem visualização), acrescente uma chave "
+            '"chart" no MESMO JSON — não crie um bloco separado nem repita '
+            "os dados. Formato:"
+        )
+        lines.append(
+            '"chart": {"type": "bar" | "line" | "pie" | "scatter", '
+            '"title": "...", "category_column": "nome exato de uma coluna '
+            'em columns", "value_columns": ["nome de coluna", ...], '
+            '"x_label": "...", "y_label": "..."}'
+        )
+        lines.append(
+            "category_column e value_columns DEVEM ser nomes que já "
+            "existem em 'columns' — nunca invente uma coluna nova só para "
+            "o gráfico. Para 'scatter', use 'x_column' no lugar de "
+            "'category_column'. Para 'pie', informe só uma coluna em "
+            "value_columns (as demais são ignoradas)."
+        )
+    else:
+        lines.append(
+            "Gráficos NÃO estão disponíveis nesta instalação (dependência "
+            "ausente): não inclua a chave 'chart' na planilha, e avise o "
+            "usuário que a instalação atual não gera gráficos se ele pedir um."
+        )
+
+    return "\n".join(lines)
+
+
 def _hex_color(value: Any, fallback: str) -> str:
     """Normaliza '#RRGGBB' → 'RRGGBB'; devolve o padrão se não for válido."""
     if not isinstance(value, str):
@@ -98,7 +176,9 @@ def _hex_color(value: Any, fallback: str) -> str:
     return cleaned if _RE_HEX.fullmatch(cleaned) else fallback
 
 
-def _parse_spec(spec: Dict[str, Any]) -> Tuple[List[str], List[list], Dict[str, str], str]:
+def _parse_spec(
+    spec: Dict[str, Any],
+) -> Tuple[List[str], List[list], Dict[str, str], str, Optional[Dict[str, Any]]]:
     """Valida e normaliza a spec, compartilhado pelos dois backends."""
     columns = spec.get("columns")
     rows = spec.get("rows")
@@ -120,7 +200,13 @@ def _parse_spec(spec: Dict[str, Any]) -> Tuple[List[str], List[list], Dict[str, 
     sheet_name = str(sheet_name)[:31] if sheet_name else "Planilha"
     sheet_name = _RE_BAD_SHEET_NAME.sub("-", sheet_name) or "Planilha"
 
-    return columns, rows, style, sheet_name
+    # Chave opcional: só é usada se vier um dict válido. Qualquer outra
+    # coisa (string, lista, ausente) é tratada como "sem gráfico" em vez
+    # de erro — a planilha não pode falhar por causa de um extra opcional.
+    chart_spec = spec.get("chart")
+    chart_spec = chart_spec if isinstance(chart_spec, dict) else None
+
+    return columns, rows, style, sheet_name, chart_spec
 
 
 def _column_widths(columns: Sequence[str], rows: Sequence[list]) -> List[int]:
@@ -164,7 +250,7 @@ def build_xlsx(spec: Dict[str, Any], path: str) -> str:
 # ── Backend XLSX (openpyxl) ──────────────────────────────────────────────────
 
 def _build_xlsx(spec: Dict[str, Any], path: str) -> str:
-    columns, rows, style, sheet_name = _parse_spec(spec)
+    columns, rows, style, sheet_name, chart_spec = _parse_spec(spec)
 
     wb = Workbook()
     ws = wb.active
@@ -201,8 +287,33 @@ def _build_xlsx(spec: Dict[str, Any], path: str) -> str:
         ws.column_dimensions[get_column_letter(index)].width = width
 
     ws.freeze_panes = "A2"
+
+    if chart_spec is not None:
+        _embed_chart_xlsx(ws, chart_spec, columns, rows, style, anchor_row=len(rows) + 3)
+
     wb.save(path)
     return path
+
+
+def _embed_chart_xlsx(
+    ws, chart_spec: Dict[str, Any], columns: List[str], rows: List[list],
+    style: Dict[str, str], anchor_row: int,
+) -> None:
+    """Gera o PNG do gráfico e o embute abaixo da tabela. Falha em silêncio
+    (log apenas) — um gráfico ruim não deve impedir a entrega da tabela."""
+    png_bytes = chart_gen.render_chart(chart_spec, columns, rows, style)
+    if not png_bytes:
+        return
+    try:
+        from openpyxl.drawing.image import Image as XLImage
+        image = XLImage(io.BytesIO(png_bytes))
+        # Dimensões explícitas: openpyxl só precisaria do Pillow pra
+        # descobrir isso sozinho a partir do PNG, e Pillow não é uma
+        # dependência que queremos exigir só por causa do gráfico.
+        image.width, image.height = 640, 384
+        ws.add_image(image, f"A{anchor_row}")
+    except Exception:  # pylint: disable=broad-except
+        logger.exception("Falha ao embutir gráfico no xlsx")
 
 
 # ── Backend ODS (odfpy) ──────────────────────────────────────────────────────
@@ -239,7 +350,7 @@ def _ods_cell(value: Any, style) -> "TableCell":
 
 
 def _build_ods(spec: Dict[str, Any], path: str) -> str:
-    columns, rows, style, sheet_name = _parse_spec(spec)
+    columns, rows, style, sheet_name, chart_spec = _parse_spec(spec)
 
     doc = OpenDocumentSpreadsheet()
 
@@ -290,6 +401,40 @@ def _build_ods(spec: Dict[str, Any], path: str) -> str:
             table_row.addElement(_ods_cell("", cell_style))
         table.addElement(table_row)
 
+    if chart_spec is not None:
+        _embed_chart_ods(doc, table, chart_spec, columns, rows, style)
+
     doc.spreadsheet.addElement(table)
     doc.save(path)
     return path
+
+
+def _embed_chart_ods(
+    doc: "OpenDocumentSpreadsheet", table: "Table", chart_spec: Dict[str, Any],
+    columns: List[str], rows: List[list], style: Dict[str, str],
+) -> None:
+    """Gera o PNG do gráfico e o embute como imagem numa linha extra abaixo
+    da tabela. Sem chart nativo do ODF (ver nota no topo do arquivo) — é
+    uma imagem, igual ao xlsx, pra manter os dois backends consistentes."""
+    png_bytes = chart_gen.render_chart(chart_spec, columns, rows, style)
+    if not png_bytes:
+        return
+    try:
+        href = doc.addPictureFromString(png_bytes, "image/png")
+        frame = DrawFrame(width="16.9cm", height="10.1cm", anchortype="paragraph")
+        frame.addElement(DrawImage(href=href))
+
+        spacer_row = TableRow()
+        for _ in columns:
+            spacer_row.addElement(TableCell())
+        table.addElement(spacer_row)
+
+        chart_row = TableRow()
+        chart_cell = TableCell()
+        chart_cell.addElement(frame)
+        chart_row.addElement(chart_cell)
+        for _ in range(len(columns) - 1):
+            chart_row.addElement(TableCell())
+        table.addElement(chart_row)
+    except Exception:  # pylint: disable=broad-except
+        logger.exception("Falha ao embutir gráfico no ods")

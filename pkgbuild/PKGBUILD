@@ -1,6 +1,6 @@
 # Maintainer: Narayan Lima da Silva <narayan.song@gmail.com>
 pkgname=por-ai
-pkgver=0.1.8.8
+pkgver=0.1.8.9
 pkgrel=1
 pkgdesc="Chat privado com modelos do OpenRouter (GTK4/Adwaita)"
 arch=('any')
@@ -17,6 +17,7 @@ depends=(
   'python-openpyxl'
   'hicolor-icon-theme'
   'python-odfpy'
+  'python-matplotlib'
   'libspelling'
   'hunspell'
   'hunspell-pt-br'

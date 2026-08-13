@@ -60,7 +60,12 @@ except ImportError:
 
 # sheet_gen não tem dependência dura: cada backend se autodetecta lá dentro,
 # então o import nunca falha por falta de odfpy ou openpyxl.
-from core.sheet_gen import SheetSpecError, available_formats, build_sheet
+from core.sheet_gen import (
+    SheetSpecError,
+    available_formats,
+    build_sheet,
+    capabilities_prompt,
+)
 
 
 # ── Extensões suportadas ──────────────────────────────────────────────────────
@@ -100,6 +105,42 @@ class ChatAssistant:
 
     def cancel(self) -> None:
         self._cancel.set()
+
+    @staticmethod
+    def _inject_capabilities(messages: List[Any]) -> List[Any]:
+        """Acrescenta as instruções de formato de planilha/gráfico (ver
+        sheet_gen.capabilities_prompt()) à mensagem de sistema, sem tocar
+        no ``system_prompt`` que o usuário edita em Preferências.
+
+        Gerado a cada envio (não uma vez só) porque reflete os backends
+        realmente instalados agora — o texto muda se o usuário instalar ou
+        remover odfpy/openpyxl/matplotlib sem reiniciar o app. Devolve uma
+        lista NOVA: a lista original pode ser reusada pelo chamador (ex.:
+        reenviar o histórico após editar uma mensagem) e não deve carregar
+        esse texto interno.
+        """
+        addendum = capabilities_prompt()
+        if not addendum:
+            return messages
+
+        result = list(messages)
+        for index, message in enumerate(result):
+            if isinstance(message, dict) and message.get("role") == "system":
+                content = message.get("content", "")
+                if isinstance(content, str):
+                    merged = dict(message)
+                    merged["content"] = f"{content}\n\n{addendum}" if content else addendum
+                    result[index] = merged
+                    return result
+                # Mensagem de sistema em formato multimodal (lista de
+                # blocos): não deveria acontecer na prática, mas se
+                # acontecer é mais seguro deixar intacta a acrescentar uma
+                # nova mensagem de sistema do que arriscar corromper o
+                # formato esperado pelo provedor.
+                break
+
+        result.insert(0, {"role": "system", "content": addendum})
+        return result
 
     def _build_client(self) -> OpenRouterClient:
         return OpenRouterClient(
@@ -289,6 +330,7 @@ class ChatAssistant:
     ) -> None:
         try:
             client = self._build_client()
+            messages = self._inject_capabilities(messages)
             extra: Dict[str, Any] = {}
             if self._is_image_model(model):
                 extra["modalities"] = ["image", "text"]
