@@ -79,8 +79,8 @@ python3 usr/share/por-ai/main.py
 ## 🚀 Primeiro uso
 
 1. Abra o **Menu ▸ Preferências** e **cole sua chave da API** do [OpenRouter](https://openrouter.ai/keys)
-2. Clique no seletor de modelo no cabeçalho e escolha o modelo desejado
-3. Use **Menu ▸ Atualizar modelos** para puxar o catálogo completo a qualquer momento
+2. Use **Menu ▸ Atualizar modelos** para puxar o catálogo completo
+3. Clique no seletor de modelo no cabeçalho e escolha o modelo desejado
 4. **Enter** envia a mensagem — **Shift+Enter** quebra linha
 
 ---
