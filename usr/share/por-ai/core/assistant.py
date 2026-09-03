@@ -2,7 +2,7 @@
 Coordenador de chat do POR.ai.
 
 Formatos de texto suportados (enviados como bloco na mensagem):
-  txt, md, rst, org, tex, csv, log, pdf, odt, ods, xlsx
+  txt, md, rst, org, tex, csv, log, json, py, pdf, odt, ods, xlsx
 
 Formatos de imagem suportados (enviados como base64 multimodal):
   jpg, jpeg, png, webp
@@ -73,6 +73,7 @@ from core.sheet_gen import (
 _TEXT_EXTENSIONS = {
     ".txt", ".md", ".markdown", ".rst", ".org",
     ".tex", ".csv", ".log",
+    ".json", ".py",
 }
 _IMAGE_EXTENSIONS = {".jpg", ".jpeg", ".png", ".webp"}
 
