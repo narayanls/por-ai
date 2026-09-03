@@ -415,7 +415,7 @@ class PorAiWindow(Adw.ApplicationWindow):
         attach_button.set_icon_name("mail-attachment-symbolic")
         attach_button.set_tooltip_text(
             "Anexar arquivos — até 4 "
-            "(pdf, odt, ods, xlsx, txt, md, csv, png, jpg, webp)"
+            "(pdf, odt, ods, xlsx, txt, md, csv, json, py, png, jpg, webp)"
         )
         attach_button.add_css_class("flat")
         attach_button.set_valign(Gtk.Align.END)
@@ -1032,16 +1032,8 @@ class PorAiWindow(Adw.ApplicationWindow):
             if not full_text.strip():
                 self._streaming_row.set_text("(resposta vazia ou cancelada)")
             else:
-                # O texto final pode ter sido reescrito pelo assistente
-                # (blocos de planilha viram links [Baixar planilha](file://)).
-                # Os deltas exibidos durante o streaming trazem a versão crua,
-                # então a bolha precisa ser substituída pelo resultado
-                # processado.
                 self._streaming_row.set_text(full_text)
             assistant_message: Dict[str, Any] = {
-                # `content` guarda o cru (com a spec da planilha) para um
-                # eventual pedido de ajuste; `display` é o que vai na bolha.
-                # Iguais quando não houve planilha na resposta.
                 "role": "assistant",
                 "content": raw_text or full_text,
                 "display": full_text,
@@ -1183,7 +1175,7 @@ class PorAiWindow(Adw.ApplicationWindow):
         doc_filter.set_name("Documentos e imagens")
         for pattern in (
             "*.txt", "*.md", "*.markdown", "*.rst", "*.org",
-            "*.tex", "*.csv", "*.log",
+            "*.tex", "*.csv", "*.log", "*.json", "*.py",
             "*.pdf", "*.odt", "*.ods", "*.xlsx",
             "*.png", "*.jpg", "*.jpeg", "*.webp",
         ):
@@ -1636,9 +1628,6 @@ class PorAiWindow(Adw.ApplicationWindow):
         self._scheme_provider = color_schemes.apply_scheme(display, scheme_id)
         # Sincroniza o fundo do campo de entrada (GtkSourceView tem scheme
         # próprio, que não segue @view_bg_color/@card_bg_color via CSS).
-        # Passamos scheme_id explicitamente: neste ponto o config ainda pode
-        # não ter sido salvo (ver _on_scheme_selected), então não dá para
-        # confiar no valor persistido.
         if hasattr(self, "_input_view"):
             self._apply_source_style_scheme(scheme_id)
 
