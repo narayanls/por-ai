@@ -24,6 +24,12 @@ Fiz este aplicativo para uso pessoal com auxílio de IA. Porém, como acredito q
 ## Não se esqueça
 Você precisa criar uma chave de API no site do OpenRouter para usar este aplicativo. Acesse o site clicando [aqui.](https://openrouter.ai) Existem **modelos PAGOS** e gratuitos, a maior parte é pago. Adicione saldo no site do OpenRouter ou pesquise por modelos grátis.
 
+## Atualize os modelos do OpenRouter
+Após inserir sua chave de API, atualize os modelos antes de começar uma conversa. Assim você terá acesso a todos os modelos disponíveis naquele momento.
+
+<img width="359" height="274" alt="Imagem colada (13)" src="https://github.com/user-attachments/assets/93066288-0907-4f50-9f27-50144420b40f" />
+
+
 ## ✨ Funcionalidades
 
 - **Histórico persistente** — conversas salvas localmente em `~/.local/share/por-ai/`; renomeie, continue ou exclua quando quiser
@@ -35,6 +41,9 @@ Você precisa criar uma chave de API no site do OpenRouter para usar este aplica
   compatíveis analisarem (GPT-4o, Claude, Gemini…)
 - **Links clicáveis** — URLs nas respostas são renderizadas como links (imagens e planilhas). As imagens ficam salvas em /home/user/.local/share/por-ai/images e as planilhas em /home/user/.local/share/por-ai/spredsheets
 - **Interface nativa** — GTK4 + Adwaita, integrada ao tema do sistema (modo escuro/claro automático). É possível personalizar escolhendo entre diversos temas como Dracula, Nord, Everforest.
+Exemplo de temas:
+<img width="460" height="560" alt="Imagem colada (15)" src="https://github.com/user-attachments/assets/1d1f0b1b-b544-4c7a-ba2d-9e387a2c33e1" />
+
 
 ---
 
