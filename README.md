@@ -100,6 +100,12 @@ O POR.ai roda no seu computador, mas depende da conexão com a internet — sem 
 
 O conteúdo das mensagens e arquivos anexados é enviado ao **OpenRouter**, que os encaminha ao provedor do modelo escolhido. Nas configurações da sua conta OpenRouter você pode restringir provedores que treinam com dados dos usuários.
 
+No site do OpenRouter você pode selecionar provedores que não armazenam conversas e/ou não usam para os prompts para treinamento. Você pode fazer isso acessando Personal -> Preferences -> Privacy.
+
+Abaixo um exemplo:
+<img width="1054" height="233" alt="Imagem colada (17)" src="https://github.com/user-attachments/assets/8d65b101-5a5d-4040-92a9-4bcb67bb38bc" />
+
+
 ---
 
 ## 🛠️ Construído com
