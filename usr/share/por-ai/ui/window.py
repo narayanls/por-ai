@@ -114,6 +114,13 @@ class PorAiWindow(Adw.ApplicationWindow):
         # Bolha do assistente em construção durante o streaming.
         self._streaming_row: Optional[MessageRow] = None
         self._pending_usage: Optional[Dict[str, Any]] = None
+        # Acumuladores da resposta em construção, usados só pra renderizar o
+        # streaming ao vivo (a fonte de verdade final vem de on_done). São
+        # dois porque o raciocínio (quando o modelo/provedor expõe) chega
+        # antes do conteúdo final, e mostramos os dois juntos na mesma
+        # bolha — o raciocínio destacado como bloco de citação.
+        self._streaming_reasoning: str = ""
+        self._streaming_content: str = ""
         # Provider CSS do esquema de cores ativo (None = tema do sistema).
         self._scheme_provider: Optional[Gtk.CssProvider] = None
         self.connect("close-request", self._on_close_request)
@@ -932,6 +939,8 @@ class PorAiWindow(Adw.ApplicationWindow):
         # Bolha do assistente (vazia, preenchida via streaming).
         self._streaming_row = MessageRow("assistant", "")
         self._messages_box.append(self._streaming_row)
+        self._streaming_reasoning = ""
+        self._streaming_content = ""
 
         self._clear_input()
         self._set_busy(True)
@@ -971,6 +980,8 @@ class PorAiWindow(Adw.ApplicationWindow):
             on_done=self._on_done,
             on_error=self._on_error,
             on_usage=self._on_usage,
+            on_reasoning=self._on_reasoning,
+            on_retry=self._on_retry,
         )
         if not started:
             self._set_busy(False)
@@ -979,9 +990,50 @@ class PorAiWindow(Adw.ApplicationWindow):
 
     def _on_delta(self, chunk: str) -> bool:
         if self._streaming_row is not None:
-            self._streaming_row.append_text(chunk)
+            self._streaming_content += chunk
+            self._render_streaming_row()
             self._scroll_to_bottom()
         return False  # GLib.idle_add: não repetir
+
+    def _on_reasoning(self, chunk: str) -> bool:
+        """Recebe os pedaços de raciocínio interno do modelo (quando
+        exposto pelo provedor — GLM, DeepSeek-R1, o1/o3, etc.) e os mostra
+        ao vivo na mesma bolha, em bloco de citação, ANTES da resposta
+        final. Sem isso a bolha ficava muda até o modelo terminar de
+        "pensar" e só então despejar tudo de uma vez."""
+        if self._streaming_row is not None:
+            self._streaming_reasoning += chunk
+            self._render_streaming_row()
+            self._scroll_to_bottom()
+        return False
+
+    def _render_streaming_row(self) -> None:
+        """Remonta o texto (markdown) da bolha em construção a partir dos
+        dois acumuladores. Reconstruir tudo a cada pedaço é mais simples e
+        seguro do que tentar "abrir e fechar" formatação incrementalmente
+        no meio de um `append_text` — e o custo é irrelevante pro tamanho
+        típico de uma resposta de chat."""
+        if self._streaming_row is None:
+            return
+        parts: List[str] = []
+        if self._streaming_reasoning:
+            lines = self._streaming_reasoning.strip("\n").splitlines() or [""]
+            quoted = "\n".join(f"> {line}" if line else ">" for line in lines)
+            parts.append(f"**💭 Pensando…**\n{quoted}")
+        if self._streaming_content:
+            parts.append(self._streaming_content)
+        self._streaming_row.set_text("\n\n".join(parts))
+
+    def _on_retry(self, attempt: int, total: int, delay: float) -> bool:
+        """Chamado quando uma falha transitória (timeout, queda de conexão,
+        429/5xx) aciona uma nova tentativa automática. A bolha permanece
+        vazia até a próxima tentativa ter sucesso; o toast só avisa que o
+        app está tentando de novo em vez de já ter desistido."""
+        self._toast(
+            f"⚠️ Conexão falhou, tentando de novo ({attempt}/{total}) em {delay:.0f}s…",
+            timeout=max(2, int(delay)),
+        )
+        return False
 
     def _on_usage(self, usage: Dict[str, Any]) -> bool:
         logger.debug("Uso recebido: %r", usage)
@@ -1044,17 +1096,28 @@ class PorAiWindow(Adw.ApplicationWindow):
             self._messages.append(assistant_message)
             self._persist()
         self._streaming_row = None
+        self._streaming_reasoning = ""
+        self._streaming_content = ""
         self._pending_usage = None
         self._set_busy(False)
         self._scroll_to_bottom(force=True)
         return False
 
     def _on_error(self, message: str) -> bool:
-        if self._streaming_row is not None and not self._streaming_row.get_text().strip():
-            self._streaming_row.set_text(f"⚠️ {message}")
-        else:
-            self._toast(message)
+        if self._streaming_row is not None:
+            current = self._streaming_row.get_text().strip()
+            if current:
+                # Já havia algo na bolha (tipicamente o raciocínio, que
+                # sozinho pareceria uma resposta legítima se ficasse sem
+                # marcação). Anexa o erro ali mesmo — o toast some em
+                # poucos segundos, a bolha fica no histórico da conversa.
+                self._streaming_row.set_text(f"{current}\n\n⚠️ {message}")
+                self._toast(message)
+            else:
+                self._streaming_row.set_text(f"⚠️ {message}")
         self._streaming_row = None
+        self._streaming_reasoning = ""
+        self._streaming_content = ""
         self._set_busy(False)
         return False
 
