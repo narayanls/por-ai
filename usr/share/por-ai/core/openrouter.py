@@ -29,7 +29,18 @@ OPENROUTER_BASE = "https://openrouter.ai/api/v1"
 
 
 class OpenRouterError(RuntimeError):
-    """Erro de comunicação ou de resposta do OpenRouter."""
+    """Erro de comunicação ou de resposta do OpenRouter.
+
+    ``retryable`` sinaliza se faz sentido tentar de novo automaticamente:
+    True para timeouts, quedas de conexão e HTTP 408/429/5xx (falhas
+    transitórias); False para erros definitivos (401 chave inválida, 400
+    payload malformado, 404 modelo inexistente, etc.), onde tentar de novo
+    só atrasaria um erro que não vai se resolver sozinho.
+    """
+
+    def __init__(self, message: str, *, retryable: bool = False) -> None:
+        super().__init__(message)
+        self.retryable = retryable
 
 
 class OpenRouterClient:
@@ -38,7 +49,7 @@ class OpenRouterClient:
         api_key: str,
         site_url: str = "",
         site_name: str = "",
-        timeout: int = 120,
+        timeout: int = 240,
     ) -> None:
         self.api_key = (api_key or "").strip()
         self.site_url = (site_url or "").strip()
@@ -71,6 +82,14 @@ class OpenRouterClient:
         url = f"{OPENROUTER_BASE}/models/user"
         try:
             response = requests.get(url, headers=self._headers(), timeout=self.timeout)
+        except requests.Timeout as exc:
+            raise OpenRouterError(
+                f"Tempo de espera esgotado ao contatar OpenRouter: {exc}", retryable=True
+            ) from exc
+        except requests.ConnectionError as exc:
+            raise OpenRouterError(
+                f"Falha de conexão com OpenRouter: {exc}", retryable=True
+            ) from exc
         except requests.RequestException as exc:
             raise OpenRouterError(f"Falha ao contatar OpenRouter: {exc}") from exc
 
@@ -78,8 +97,7 @@ class OpenRouterClient:
         # ISO-8859-1 e gerar acentuação corrompida ("Ã§" no lugar de "ç").
         response.encoding = "utf-8"
 
-        if response.status_code >= 400:
-            raise OpenRouterError(self._format_error(response))
+        self._raise_for_status(response)
 
         try:
             payload = response.json()
@@ -98,7 +116,10 @@ class OpenRouterClient:
         model: str,
         messages: List[Dict[str, str]],
         **params: Any,
-    ) -> Tuple[str, List[str], Optional[Dict[str, Any]]]:
+    ) -> Tuple[str, List[str], Optional[Dict[str, Any]], str]:
+        """Retorna (texto, urls_de_imagem, usage, reasoning). ``reasoning``
+        é o raciocínio interno que alguns modelos expõem separado do
+        conteúdo final; vem vazio para modelos que não o expõem."""
         url = f"{OPENROUTER_BASE}/chat/completions"
         payload: Dict[str, Any] = {
             "model": model,
@@ -111,13 +132,20 @@ class OpenRouterClient:
             response = requests.post(
                 url, headers=self._headers(), json=payload, timeout=self.timeout
             )
+        except requests.Timeout as exc:
+            raise OpenRouterError(
+                f"Tempo de espera esgotado ao contatar OpenRouter: {exc}", retryable=True
+            ) from exc
+        except requests.ConnectionError as exc:
+            raise OpenRouterError(
+                f"Falha de conexão com OpenRouter: {exc}", retryable=True
+            ) from exc
         except requests.RequestException as exc:
             raise OpenRouterError(f"Falha ao contatar OpenRouter: {exc}") from exc
 
         response.encoding = "utf-8"
 
-        if response.status_code >= 400:
-            raise OpenRouterError(self._format_error(response))
+        self._raise_for_status(response)
 
         try:
             data = response.json()
@@ -129,6 +157,7 @@ class OpenRouterClient:
             raise OpenRouterError("O provedor retornou uma resposta vazia.")
         message = choices[0].get("message") if isinstance(choices[0], dict) else None
         content = message.get("content") if isinstance(message, dict) else None
+        reasoning_field = message.get("reasoning") if isinstance(message, dict) else None
         image_urls = self._extract_images(
             message.get("images") if isinstance(message, dict) else None
         )
@@ -136,9 +165,22 @@ class OpenRouterClient:
         usage = data.get("usage") if isinstance(data.get("usage"), dict) else None
         self._debug_log(model, finish_reason, usage)
         text = content.strip() if isinstance(content, str) else ""
+        reasoning = reasoning_field.strip() if isinstance(reasoning_field, str) else ""
         if not text and not image_urls:
+            if finish_reason == "error":
+                raise OpenRouterError(
+                    "O modelo esgotou o limite de tokens pensando e não chegou a "
+                    "gerar a resposta final (finish_reason=error). Aumente o "
+                    "limite de tokens em Preferências, reduza o tamanho do "
+                    "prompt, ou tente um modelo com raciocínio menos verboso."
+                )
+            if reasoning:
+                raise OpenRouterError(
+                    "O modelo só retornou raciocínio interno, sem uma resposta "
+                    f"final (finish_reason={finish_reason or 'desconhecido'})."
+                )
             raise OpenRouterError("O provedor não retornou conteúdo utilizável.")
-        return text, image_urls, usage
+        return text, image_urls, usage, reasoning
 
     # ------------------------------------------------------------------ #
     # Completagem em streaming (SSE)                                       #
@@ -150,11 +192,21 @@ class OpenRouterClient:
         messages: List[Dict[str, str]],
         on_delta: Callable[[str], None],
         should_cancel: Optional[Callable[[], bool]] = None,
+        on_reasoning: Optional[Callable[[str], None]] = None,
         **params: Any,
-    ) -> Tuple[str, List[str], Optional[Dict[str, Any]]]:
+    ) -> Tuple[str, List[str], Optional[Dict[str, Any]], str]:
         """
-        Envia a conversa em modo streaming. Para cada pedaço de texto recebido,
-        chama ``on_delta(texto)``. Retorna o texto completo acumulado.
+        Envia a conversa em modo streaming. Para cada pedaço de texto do
+        conteúdo final, chama ``on_delta(texto)``. Modelos que expõem
+        raciocínio separado (campo ``reasoning`` no delta — é o caso de
+        GLM, DeepSeek-R1, o1/o3 e outros roteados como "reasoning" no
+        OpenRouter) chamam ``on_reasoning(texto)`` à medida que os tokens de
+        "pensamento" chegam, ANTES do conteúdo final começar. Sem esse
+        callback, o app só mostra algo quando o modelo já parou de pensar
+        e começa a escrever a resposta — daí a sensação de "trava e só
+        depois aparece tudo de uma vez".
+
+        Retorna (texto_completo, urls_de_imagem, usage, raciocínio_completo).
 
         ``should_cancel`` é uma função opcional; se retornar True, o stream é
         interrompido e a conexão fechada.
@@ -170,9 +222,11 @@ class OpenRouterClient:
         payload.update(self._clean_params(params))
 
         collected: List[str] = []
+        collected_reasoning: List[str] = []
         collected_images: List[str] = []
         finish_reason: Optional[str] = None
         usage: Optional[Dict[str, Any]] = None
+        stream_error: Optional[str] = None
         try:
             with requests.post(
                 url,
@@ -184,8 +238,7 @@ class OpenRouterClient:
                 # Garante UTF-8 (útil também para a leitura do corpo de erro).
                 response.encoding = "utf-8"
 
-                if response.status_code >= 400:
-                    raise OpenRouterError(self._format_error(response))
+                self._raise_for_status(response)
 
                 # Lê linhas como bytes e decodifica em UTF-8 nós mesmos. Cada
                 # linha é uma sequência UTF-8 completa (o '\n' que separa linhas
@@ -213,23 +266,69 @@ class OpenRouterClient:
                         chunk = json.loads(data_str)
                     except ValueError:
                         continue
+                    # Alguns provedores mandam um objeto de erro DENTRO do
+                    # stream (HTTP 200, SSE normal) em vez de cortar a
+                    # conexão com status >= 400. Sem checar isso, um erro
+                    # no meio da geração vira silenciosamente uma resposta
+                    # "vazia".
+                    chunk_error = chunk.get("error")
+                    if isinstance(chunk_error, dict):
+                        stream_error = chunk_error.get("message") or str(chunk_error)
                     chunk_finish = self._extract_finish_reason(chunk)
                     if chunk_finish:
                         finish_reason = chunk_finish
                     chunk_usage = chunk.get("usage")
                     if isinstance(chunk_usage, dict):
                         usage = chunk_usage
-                    delta_text, delta_images = self._extract_delta(chunk)
+                    delta_text, delta_reasoning, delta_images = self._extract_delta(chunk)
+                    if delta_reasoning:
+                        collected_reasoning.append(delta_reasoning)
+                        if on_reasoning is not None:
+                            on_reasoning(delta_reasoning)
                     if delta_text:
                         collected.append(delta_text)
                         on_delta(delta_text)
                     if delta_images:
                         collected_images.extend(delta_images)
+        except requests.Timeout as exc:
+            raise OpenRouterError(
+                f"Tempo de espera esgotado ao contatar OpenRouter: {exc}", retryable=True
+            ) from exc
+        except requests.ConnectionError as exc:
+            raise OpenRouterError(
+                f"Falha de conexão com OpenRouter: {exc}", retryable=True
+            ) from exc
         except requests.RequestException as exc:
             raise OpenRouterError(f"Falha ao contatar OpenRouter: {exc}") from exc
 
         self._debug_log(model, finish_reason, usage)
-        return "".join(collected), collected_images, usage
+
+        final_text = "".join(collected)
+        final_reasoning = "".join(collected_reasoning)
+
+        if stream_error:
+            raise OpenRouterError(f"O provedor retornou um erro durante a geração: {stream_error}")
+
+        if not final_text and not collected_images:
+            if should_cancel is not None and should_cancel():
+                # Cancelado pelo usuário: não é erro, devolve o que tiver
+                # (tipicamente só o raciocínio, se o modelo chegou a pensar).
+                return final_text, collected_images, usage, final_reasoning
+            if finish_reason == "error":
+                raise OpenRouterError(
+                    "O modelo esgotou o limite de tokens pensando e não chegou a "
+                    "gerar a resposta final (finish_reason=error). Aumente o "
+                    "limite de tokens em Preferências, reduza o tamanho do "
+                    "prompt, ou tente um modelo com raciocínio menos verboso."
+                )
+            if final_reasoning:
+                raise OpenRouterError(
+                    "O modelo só retornou raciocínio interno, sem uma resposta "
+                    f"final (finish_reason={finish_reason or 'desconhecido'})."
+                )
+            raise OpenRouterError("O provedor não retornou conteúdo utilizável.")
+
+        return final_text, collected_images, usage, final_reasoning
 
     # ------------------------------------------------------------------ #
     # Auxiliares                                                           #
@@ -253,15 +352,23 @@ class OpenRouterClient:
 
     
     @staticmethod
-    def _extract_delta(chunk: Dict[str, Any]) -> Tuple[str, List[str]]:
+    def _extract_delta(chunk: Dict[str, Any]) -> Tuple[str, str, List[str]]:
+        """Retorna (texto_conteudo, texto_raciocinio, urls_de_imagem) de um
+        chunk SSE. O raciocínio vem em ``delta.reasoning`` (padrão usado pelo
+        OpenRouter para modelos "reasoning") ou, em alguns provedores, em
+        ``delta.reasoning_content`` — checamos os dois nomes."""
         choices = chunk.get("choices") or []
         if not choices or not isinstance(choices[0], dict):
-            return "", []
+            return "", "", []
         delta = choices[0].get("delta") or {}
         content = delta.get("content")
         text = content if isinstance(content, str) else ""
+        reasoning = delta.get("reasoning")
+        if not isinstance(reasoning, str):
+            reasoning = delta.get("reasoning_content")
+        reasoning_text = reasoning if isinstance(reasoning, str) else ""
         images = OpenRouterClient._extract_images(delta.get("images"))
-        return text, images
+        return text, reasoning_text, images
 
     @staticmethod
     def _extract_finish_reason(chunk: Dict[str, Any]) -> Optional[str]:
@@ -333,6 +440,20 @@ class OpenRouterClient:
     def _clean_params(params: Dict[str, Any]) -> Dict[str, Any]:
         # Remove valores None para não enviar campos vazios.
         return {key: value for key, value in params.items() if value is not None}
+
+    # HTTP 408/425/429 e 5xx costumam ser falhas transitórias (rate limit,
+    # provedor sobrecarregado, gateway instável) — vale tentar de novo. Os
+    # demais 4xx (401 chave inválida, 400 payload malformado, 404 modelo
+    # inexistente etc.) são definitivos: tentar de novo não muda o resultado.
+    _RETRYABLE_STATUS_CODES = {408, 425, 429, 500, 502, 503, 504}
+
+    @staticmethod
+    def _raise_for_status(response: requests.Response) -> None:
+        if response.status_code < 400:
+            return
+        message = OpenRouterClient._format_error(response)
+        retryable = response.status_code in OpenRouterClient._RETRYABLE_STATUS_CODES
+        raise OpenRouterError(message, retryable=retryable)
 
     @staticmethod
     def _format_error(response: requests.Response) -> str:

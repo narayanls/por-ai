@@ -87,6 +87,13 @@ class ChatAssistant:
     # OpenRouter a cada mensagem só pra saber a janela de contexto).
     _MODEL_CACHE_TTL = 3600.0
 
+    # Retry com backoff exponencial para falhas transitórias (timeout, queda
+    # de conexão, 429/5xx do provedor). Só é acionado quando NENHUM token da
+    # resposta chegou ainda — se o streaming já começou, tentar de novo criaria
+    # texto duplicado/fora de ordem, então nesse caso o erro sobe direto.
+    _MAX_RETRY_ATTEMPTS = 3
+    _RETRY_BASE_DELAY = 2.0  # segundos; dobra a cada tentativa (2s, 4s, 8s...)
+
     def __init__(self, config: Config) -> None:
         self.config = config
         self._lock = threading.RLock()
@@ -182,13 +189,12 @@ class ChatAssistant:
     # que sobrar (com uma margem de segurança) como teto — sem nunca
     # ultrapassar o que o modelo de fato aceita.
 
-    def _get_model_limits(
+    def _get_model_entry(
         self, client: OpenRouterClient, model: str
-    ) -> Tuple[Optional[int], Optional[int]]:
-        """Retorna (context_length, max_completion_tokens) do modelo, usando
-        um cache de até 1h do catálogo pra não bater na API a cada envio.
-        Se a consulta falhar (sem rede, chave inválida etc.), devolve
-        (None, None) — o chamador cai de volta no comportamento antigo."""
+    ) -> Optional[Dict[str, Any]]:
+        """Retorna a entrada crua do catálogo do OpenRouter pro modelo, usando
+        um cache de até 1h pra não bater na API a cada envio. Se a consulta
+        falhar (sem rede, chave inválida etc.), devolve None."""
         with self._model_cache_lock:
             expired = (time.monotonic() - self._model_cache_time) > self._MODEL_CACHE_TTL
             if expired or not self._model_cache:
@@ -203,8 +209,28 @@ class ChatAssistant:
                             cache[str(entry["id"])] = entry
                     self._model_cache = cache
                     self._model_cache_time = time.monotonic()
-            entry = self._model_cache.get(model)
-        return self._extract_limits(entry)
+            return self._model_cache.get(model)
+
+    def _get_model_limits(
+        self, client: OpenRouterClient, model: str
+    ) -> Tuple[Optional[int], Optional[int]]:
+        """Retorna (context_length, max_completion_tokens) do modelo (ver
+        ``_get_model_entry`` pro comportamento do cache)."""
+        return self._extract_limits(self._get_model_entry(client, model))
+
+    @staticmethod
+    def _model_supports_reasoning_control(entry: Optional[Dict[str, Any]]) -> bool:
+        """True se o catálogo indica que o modelo aceita o parâmetro unificado
+        ``reasoning`` do OpenRouter (campo ``supported_parameters``). Usado
+        pra decidir se vale a pena capar ``reasoning.max_tokens`` — mandar
+        esse campo pra um modelo que não suporta reasoning é inofensivo (o
+        OpenRouter ignora), mas só faz sentido gastar esse cuidado quando
+        sabemos que o modelo de fato usa um orçamento de "pensamento"
+        separado do texto final."""
+        if not isinstance(entry, dict):
+            return False
+        supported = entry.get("supported_parameters")
+        return isinstance(supported, list) and "reasoning" in supported
 
     @staticmethod
     def _extract_limits(
@@ -303,6 +329,16 @@ class ChatAssistant:
         on_done: Callable[[str, str], None],
         on_error: Callable[[str], None],
         on_usage: Optional[Callable[[Dict[str, Any]], None]] = None,
+        # on_reasoning(texto): chamado com os pedaços do raciocínio interno do
+        # modelo (quando o modelo/provedor expõe isso), ANTES do conteúdo
+        # final começar a chegar. Opcional — se None, o raciocínio é
+        # simplesmente descartado, como no comportamento antigo.
+        on_reasoning: Optional[Callable[[str], None]] = None,
+        # on_retry(tentativa, total, espera_segundos): chamado quando uma
+        # falha transitória (timeout, queda de conexão, 429/5xx) aciona uma
+        # nova tentativa automática. Útil pra UI mostrar algo como
+        # "Reconectando (tentativa 2/3)...".
+        on_retry: Optional[Callable[[int, int, float], None]] = None,
     ) -> bool:
         with self._lock:
             if self._inflight:
@@ -312,7 +348,7 @@ class ChatAssistant:
 
         threading.Thread(
             target=self._worker,
-            args=(model, messages, on_delta, on_done, on_error, on_usage),
+            args=(model, messages, on_delta, on_done, on_error, on_usage, on_reasoning, on_retry),
             daemon=True,
         ).start()
         return True
@@ -328,6 +364,8 @@ class ChatAssistant:
         on_done: Callable[[str, str], None],
         on_error: Callable[[str], None],
         on_usage: Optional[Callable[[Dict[str, Any]], None]] = None,
+        on_reasoning: Optional[Callable[[str], None]] = None,
+        on_retry: Optional[Callable[[int, int, float], None]] = None,
     ) -> None:
         try:
             client = self._build_client()
@@ -343,26 +381,97 @@ class ChatAssistant:
                 max_tokens = None
             else:
                 max_tokens = self._resolve_max_tokens(client, model, messages)
+                if max_tokens:
+                    entry = self._get_model_entry(client, model)
+                    if self._model_supports_reasoning_control(entry):
+                        # Reserva uma fatia do teto pra resposta final, sem
+                        # deixar o modelo gastar 100% do orçamento pensando
+                        # e terminar sem escrever nada (finish_reason=error).
+                        # 25% do total, com piso de 256 e teto de 2048 —
+                        # generoso o bastante pra respostas curtas/médias,
+                        # sem sacrificar tanto espaço de raciocínio em
+                        # modelos com teto grande.
+                        content_reserve = max(256, min(max_tokens // 4, 2048))
+                        reasoning_cap = max_tokens - content_reserve
+                        if reasoning_cap > 0:
+                            extra["reasoning"] = {"max_tokens": reasoning_cap}
 
-            if self.config.stream:
-                full, images, usage = client.stream_chat(
-                    model=model,
-                    messages=messages,
-                    on_delta=lambda text: GLib.idle_add(on_delta, text),
-                    should_cancel=self._cancel.is_set,
-                    temperature=self.config.temperature,
-                    max_tokens=max_tokens,
-                    **extra,
-                )
-            else:
-                full, images, usage = client.chat(
-                    model=model,
-                    messages=messages,
-                    temperature=self.config.temperature,
-                    max_tokens=max_tokens,
-                    **extra,
-                )
-                GLib.idle_add(on_delta, full)
+            # Sinaliza se algum pedaço da resposta (raciocínio ou conteúdo)
+            # já chegou a ser entregue à UI. Uma vez True, uma falha de rede
+            # não pode mais ser resolvida com retry silencioso: o usuário já
+            # está vendo uma resposta parcial, e reenviar do zero duplicaria
+            # ou embaralharia o texto.
+            got_data = False
+
+            def _wrapped_on_delta(text: str) -> None:
+                nonlocal got_data
+                if text:
+                    got_data = True
+                GLib.idle_add(on_delta, text)
+
+            def _wrapped_on_reasoning(text: str) -> None:
+                nonlocal got_data
+                if text:
+                    got_data = True
+                if on_reasoning is not None:
+                    GLib.idle_add(on_reasoning, text)
+
+            attempt = 0
+            while True:
+                attempt += 1
+                try:
+                    if self.config.stream:
+                        full, images, usage, _reasoning = client.stream_chat(
+                            model=model,
+                            messages=messages,
+                            on_delta=_wrapped_on_delta,
+                            on_reasoning=_wrapped_on_reasoning,
+                            should_cancel=self._cancel.is_set,
+                            temperature=self.config.temperature,
+                            max_tokens=max_tokens,
+                            **extra,
+                        )
+                    else:
+                        full, images, usage, reasoning = client.chat(
+                            model=model,
+                            messages=messages,
+                            temperature=self.config.temperature,
+                            max_tokens=max_tokens,
+                            **extra,
+                        )
+                        # Sem streaming não há "ao vivo" possível, mas ainda
+                        # mostramos o raciocínio completo antes da resposta
+                        # final, caso o provedor o tenha devolvido.
+                        if reasoning and on_reasoning is not None:
+                            GLib.idle_add(on_reasoning, reasoning)
+                        GLib.idle_add(on_delta, full)
+                    break  # sucesso — sai do loop de tentativas
+                except OpenRouterError as exc:
+                    if self._cancel.is_set():
+                        raise
+                    exhausted = attempt >= self._MAX_RETRY_ATTEMPTS
+                    if not exc.retryable or got_data or exhausted:
+                        raise
+                    delay = self._RETRY_BASE_DELAY * (2 ** (attempt - 1))
+                    logger.warning(
+                        "Tentativa %d/%d falhou (%s); nova tentativa em %.0fs",
+                        attempt,
+                        self._MAX_RETRY_ATTEMPTS,
+                        exc,
+                        delay,
+                    )
+                    if on_retry is not None:
+                        GLib.idle_add(on_retry, attempt, self._MAX_RETRY_ATTEMPTS, delay)
+                    # Espera em passos curtos pra continuar respondendo a um
+                    # cancelamento pedido pelo usuário durante a espera.
+                    waited = 0.0
+                    step = 0.2
+                    while waited < delay:
+                        if self._cancel.is_set():
+                            raise OpenRouterError("Cancelado pelo usuário.") from exc
+                        time.sleep(step)
+                        waited += step
+                    continue
 
             if images:
                 markdown_links = self._save_generated_images(images)
