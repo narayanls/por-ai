@@ -86,6 +86,13 @@ class ChatAssistant:
     # Tempo de vida do cache do catálogo de modelos (evita bater na API do
     # OpenRouter a cada mensagem só pra saber a janela de contexto).
     _MODEL_CACHE_TTL = 3600.0
+    # Se a consulta ao catálogo falhar, espera este tempo antes de tentar de
+    # novo. Sem isso, cada mensagem enviada repetia o download do catálogo
+    # (e esperava o timeout inteiro) antes mesmo de começar a conversa.
+    _MODEL_CACHE_RETRY_AFTER = 60.0
+    # Timeout só do catálogo — bem menor que o do chat: é um GET simples, e
+    # ele fica no caminho crítico da primeira mensagem.
+    _MODEL_CATALOG_TIMEOUT = 20
 
     # Retry com backoff exponencial para falhas transitórias (timeout, queda
     # de conexão, 429/5xx do provedor). Só é acionado quando NENHUM token da
@@ -101,6 +108,7 @@ class ChatAssistant:
         self._cancel = threading.Event()
         self._model_cache: Dict[str, Dict[str, Any]] = {}
         self._model_cache_time: float = 0.0
+        self._model_cache_failed_at: float = 0.0
         self._model_cache_lock = threading.Lock()
 
     # ------------------------------------------------------------------ #
@@ -196,13 +204,21 @@ class ChatAssistant:
         um cache de até 1h pra não bater na API a cada envio. Se a consulta
         falhar (sem rede, chave inválida etc.), devolve None."""
         with self._model_cache_lock:
-            expired = (time.monotonic() - self._model_cache_time) > self._MODEL_CACHE_TTL
-            if expired or not self._model_cache:
+            now = time.monotonic()
+            expired = (now - self._model_cache_time) > self._MODEL_CACHE_TTL
+            recently_failed = (
+                self._model_cache_failed_at
+                and (now - self._model_cache_failed_at) < self._MODEL_CACHE_RETRY_AFTER
+            )
+            if (expired or not self._model_cache) and not recently_failed:
                 try:
-                    raw = client.list_models()
-                except OpenRouterError:
+                    raw = client.list_models(timeout=self._MODEL_CATALOG_TIMEOUT)
+                except OpenRouterError as exc:
+                    logger.info("Catálogo de modelos indisponível: %s", exc)
                     raw = None
+                    self._model_cache_failed_at = time.monotonic()
                 if raw is not None:
+                    self._model_cache_failed_at = 0.0
                     cache: Dict[str, Dict[str, Any]] = {}
                     for entry in raw:
                         if isinstance(entry, dict) and entry.get("id"):
@@ -210,6 +226,25 @@ class ChatAssistant:
                     self._model_cache = cache
                     self._model_cache_time = time.monotonic()
             return self._model_cache.get(model)
+
+    def prewarm_model_cache(self) -> None:
+        """Baixa o catálogo de modelos em segundo plano.
+
+        O catálogo é necessário para calcular max_tokens de cada envio. Sem
+        o pré-carregamento, a PRIMEIRA mensagem de cada sessão do app
+        esperava o download do catálogo inteiro antes de começar a falar com
+        o modelo — um atraso que o usuário percebia como "a IA demora".
+        """
+        if not self.config.is_configured():
+            return
+
+        def worker() -> None:
+            try:
+                self._get_model_entry(self._build_client(), "")
+            except Exception:  # pylint: disable=broad-except
+                logger.debug("Pré-carregamento do catálogo falhou", exc_info=True)
+
+        threading.Thread(target=worker, daemon=True).start()
 
     def _get_model_limits(
         self, client: OpenRouterClient, model: str
@@ -231,6 +266,39 @@ class ChatAssistant:
             return False
         supported = entry.get("supported_parameters")
         return isinstance(supported, list) and "reasoning" in supported
+
+    @staticmethod
+    def _build_reasoning_param(
+        effort: str, entry: Optional[Dict[str, Any]]
+    ) -> Optional[Dict[str, Any]]:
+        """Monta o parâmetro ``reasoning`` a partir da preferência do usuário.
+
+        "auto" não manda nada: cada modelo usa o próprio padrão. Antes o app
+        mandava ``reasoning.max_tokens`` = quase todo o teto de saída. Pela
+        documentação do OpenRouter, isso LIGA o pensamento em modelos onde
+        ele vem desligado (Claude, Gemini) com orçamento enorme, e em modelos
+        que só aceitam nível de esforço (GPT-5, Grok) a proporção
+        max_tokens do raciocínio / max_tokens total (~98%) é convertida no
+        nível de esforço mais alto. Resultado: toda mensagem, até um "oi",
+        pensava no máximo — daí a lentidão comparada ao chat do navegador.
+        """
+        if effort == "auto":
+            return None
+        if entry is None:
+            # Catálogo indisponível: não dá pra saber se "none" seria
+            # recusado (modelos de raciocínio obrigatório respondem 400).
+            return None if effort == "none" else {"effort": effort}
+        if not ChatAssistant._model_supports_reasoning_control(entry):
+            return None
+        info = entry.get("reasoning")
+        info = info if isinstance(info, dict) else {}
+        if effort == "none" and info.get("mandatory"):
+            supported = info.get("supported_efforts")
+            if isinstance(supported, list) and supported:
+                # Lista vem em ordem decrescente; o último é o mais leve.
+                return {"effort": str(supported[-1])}
+            return {"effort": "minimal"}
+        return {"effort": effort}
 
     @staticmethod
     def _extract_limits(
@@ -381,20 +449,24 @@ class ChatAssistant:
                 max_tokens = None
             else:
                 max_tokens = self._resolve_max_tokens(client, model, messages)
-                if max_tokens:
-                    entry = self._get_model_entry(client, model)
-                    if self._model_supports_reasoning_control(entry):
-                        # Reserva uma fatia do teto pra resposta final, sem
-                        # deixar o modelo gastar 100% do orçamento pensando
-                        # e terminar sem escrever nada (finish_reason=error).
-                        # 25% do total, com piso de 256 e teto de 2048 —
-                        # generoso o bastante pra respostas curtas/médias,
-                        # sem sacrificar tanto espaço de raciocínio em
-                        # modelos com teto grande.
-                        content_reserve = max(256, min(max_tokens // 4, 2048))
-                        reasoning_cap = max_tokens - content_reserve
-                        if reasoning_cap > 0:
-                            extra["reasoning"] = {"max_tokens": reasoning_cap}
+                # Ver _build_reasoning_param: o antigo reasoning.max_tokens
+                # quase igual ao teto forçava raciocínio máximo em toda
+                # mensagem. Agora só manda algo se o usuário escolher um
+                # nível. Com um nível (effort), o próprio OpenRouter reserva
+                # a fatia da resposta final (ex.: "high" usa ~80% do teto).
+                reasoning = self._build_reasoning_param(
+                    self.config.reasoning_effort,
+                    self._get_model_entry(client, model),
+                )
+                if reasoning:
+                    extra["reasoning"] = reasoning
+
+            provider_sort = self.config.provider_sort
+            if provider_sort:
+                # Padrão do OpenRouter: balancear pelos provedores mais
+                # BARATOS, que nem sempre são os mais rápidos (pesa bastante
+                # em modelos abertos: DeepSeek, Llama, GLM, Qwen...).
+                extra["provider"] = {"sort": provider_sort}
 
             # Sinaliza se algum pedaço da resposta (raciocínio ou conteúdo)
             # já chegou a ser entregue à UI. Uma vez True, uma falha de rede

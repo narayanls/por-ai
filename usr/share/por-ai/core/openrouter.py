@@ -1,14 +1,6 @@
 """
 Cliente do OpenRouter para o POR.ai.
 
-Este módulo é "puro": não importa GTK nem toca na interface. Ele só fala HTTP
-com o OpenRouter usando o endpoint compatível com OpenAI
-(``/api/v1/chat/completions``) e expõe:
-
-  * :meth:`OpenRouterClient.stream_chat` — completagem em streaming (SSE);
-  * :meth:`OpenRouterClient.chat`        — completagem sem streaming;
-  * :meth:`OpenRouterClient.list_models` — catálogo de modelos disponíveis.
-
 O padrão de cabeçalhos segue o recomendado pelo OpenRouter:
 ``Authorization: Bearer <chave>`` e, opcionalmente, ``HTTP-Referer`` (site_url)
 e ``X-Title`` (site_name) para aparecer nas estatísticas da sua conta.
@@ -18,6 +10,7 @@ from __future__ import annotations
 
 import json
 import logging
+import time
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
 
@@ -77,11 +70,16 @@ class OpenRouterClient:
     # Catálogo de modelos                                                  #
     # ------------------------------------------------------------------ #
 
-    def list_models(self) -> List[Dict[str, Any]]:
-        """Retorna a lista de modelos do OpenRouter (campo ``data``)."""
+    def list_models(self, timeout: Optional[float] = None) -> List[Dict[str, Any]]:
+        """Retorna a lista de modelos do OpenRouter (campo ``data``).
+
+        ``timeout`` permite um limite menor que o do chat (o catálogo fica
+        no caminho da primeira mensagem, então não pode esperar 240 s)."""
         url = f"{OPENROUTER_BASE}/models/user"
         try:
-            response = requests.get(url, headers=self._headers(), timeout=self.timeout)
+            response = requests.get(
+                url, headers=self._headers(), timeout=timeout or self.timeout
+            )
         except requests.Timeout as exc:
             raise OpenRouterError(
                 f"Tempo de espera esgotado ao contatar OpenRouter: {exc}", retryable=True
@@ -128,6 +126,7 @@ class OpenRouterClient:
         }
         payload.update(self._clean_params(params))
 
+        started = time.monotonic()
         try:
             response = requests.post(
                 url, headers=self._headers(), json=payload, timeout=self.timeout
@@ -163,7 +162,13 @@ class OpenRouterClient:
         )
         finish_reason = choices[0].get("finish_reason") if isinstance(choices[0], dict) else None
         usage = data.get("usage") if isinstance(data.get("usage"), dict) else None
-        self._debug_log(model, finish_reason, usage)
+        self._debug_log(
+            model,
+            finish_reason,
+            usage,
+            timing={"total": time.monotonic() - started},
+            provider=data.get("provider"),
+        )
         text = content.strip() if isinstance(content, str) else ""
         reasoning = reasoning_field.strip() if isinstance(reasoning_field, str) else ""
         if not text and not image_urls:
@@ -171,8 +176,9 @@ class OpenRouterClient:
                 raise OpenRouterError(
                     "O modelo esgotou o limite de tokens pensando e não chegou a "
                     "gerar a resposta final (finish_reason=error). Aumente o "
-                    "limite de tokens em Preferências, reduza o tamanho do "
-                    "prompt, ou tente um modelo com raciocínio menos verboso."
+                    "limite de tokens em Preferências, reduza o esforço de "
+                    "raciocínio, reduza o tamanho do prompt, ou tente um "
+                    "modelo com raciocínio menos verboso."
                 )
             if reasoning:
                 raise OpenRouterError(
@@ -227,6 +233,12 @@ class OpenRouterClient:
         finish_reason: Optional[str] = None
         usage: Optional[Dict[str, Any]] = None
         stream_error: Optional[str] = None
+        # Marcos de tempo (segundos desde o envio) para o log de depuração.
+        # Separam o que é rede/OpenRouter (resposta HTTP), o que é o modelo
+        # pensando (1º raciocínio → 1º texto) e a velocidade de geração.
+        started = time.monotonic()
+        timing: Dict[str, float] = {}
+        provider: Optional[str] = None
         try:
             with requests.post(
                 url,
@@ -239,6 +251,7 @@ class OpenRouterClient:
                 response.encoding = "utf-8"
 
                 self._raise_for_status(response)
+                timing["http"] = time.monotonic() - started
 
                 # Lê linhas como bytes e decodifica em UTF-8 nós mesmos. Cada
                 # linha é uma sequência UTF-8 completa (o '\n' que separa linhas
@@ -280,7 +293,13 @@ class OpenRouterClient:
                     chunk_usage = chunk.get("usage")
                     if isinstance(chunk_usage, dict):
                         usage = chunk_usage
+                    if provider is None and isinstance(chunk.get("provider"), str):
+                        provider = chunk["provider"]
                     delta_text, delta_reasoning, delta_images = self._extract_delta(chunk)
+                    if delta_reasoning and "first_reasoning" not in timing:
+                        timing["first_reasoning"] = time.monotonic() - started
+                    if delta_text and "first_content" not in timing:
+                        timing["first_content"] = time.monotonic() - started
                     if delta_reasoning:
                         collected_reasoning.append(delta_reasoning)
                         if on_reasoning is not None:
@@ -301,7 +320,8 @@ class OpenRouterClient:
         except requests.RequestException as exc:
             raise OpenRouterError(f"Falha ao contatar OpenRouter: {exc}") from exc
 
-        self._debug_log(model, finish_reason, usage)
+        timing["total"] = time.monotonic() - started
+        self._debug_log(model, finish_reason, usage, timing=timing, provider=provider)
 
         final_text = "".join(collected)
         final_reasoning = "".join(collected_reasoning)
@@ -318,8 +338,9 @@ class OpenRouterClient:
                 raise OpenRouterError(
                     "O modelo esgotou o limite de tokens pensando e não chegou a "
                     "gerar a resposta final (finish_reason=error). Aumente o "
-                    "limite de tokens em Preferências, reduza o tamanho do "
-                    "prompt, ou tente um modelo com raciocínio menos verboso."
+                    "limite de tokens em Preferências, reduza o esforço de "
+                    "raciocínio, reduza o tamanho do prompt, ou tente um "
+                    "modelo com raciocínio menos verboso."
                 )
             if final_reasoning:
                 raise OpenRouterError(
@@ -383,6 +404,8 @@ class OpenRouterClient:
         model: str,
         finish_reason: Optional[str],
         usage: Optional[Dict[str, Any]],
+        timing: Optional[Dict[str, float]] = None,
+        provider: Optional[str] = None,
     ) -> None:
         """Imprime no terminal o motivo de término e o uso de tokens.
 
@@ -410,6 +433,46 @@ class OpenRouterClient:
             f"[por-ai][debug] modelo={model} finish_reason={reason_str} "
             f"tokens=({usage_str}){flag}"
         )
+        if timing:
+            OpenRouterClient._debug_log_timing(timing, usage, provider)
+
+    @staticmethod
+    def _debug_log_timing(
+        timing: Dict[str, float],
+        usage: Optional[Dict[str, Any]],
+        provider: Optional[str],
+    ) -> None:
+        """Imprime onde o tempo foi gasto. Leitura rápida:
+
+        * ``http`` alto (vários segundos): fila/rede no OpenRouter ou no
+          provedor — ``provider_sort="latency"`` pode ajudar.
+        * ``pensando`` alto: o modelo raciocinando — reduza
+          ``reasoning_effort`` ou use um modelo sem raciocínio.
+        * ``tok/s`` baixo: provedor lento — ``provider_sort="throughput"``.
+        """
+
+        def fmt(key: str) -> str:
+            value = timing.get(key)
+            return f"{value:.1f}s" if value is not None else "-"
+
+        parts = [f"resposta HTTP={fmt('http')}"]
+        if "first_reasoning" in timing:
+            parts.append(f"1º raciocínio={fmt('first_reasoning')}")
+        parts.append(f"1º texto={fmt('first_content')}")
+        parts.append(f"total={fmt('total')}")
+
+        first = timing.get("first_reasoning", timing.get("first_content"))
+        if first is not None and "first_content" in timing:
+            parts.append(f"pensando={timing['first_content'] - first:.1f}s")
+
+        completion = usage.get("completion_tokens") if isinstance(usage, dict) else None
+        if isinstance(completion, (int, float)) and first is not None:
+            generating = timing.get("total", 0.0) - first
+            if generating > 0.2:
+                parts.append(f"velocidade={completion / generating:.0f} tok/s")
+
+        parts.append(f"provedor={provider or '?'}")
+        print("[por-ai][debug] tempos: " + "  ".join(parts), flush=True)
 
     @staticmethod
     def _normalise_messages(

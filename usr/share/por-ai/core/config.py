@@ -53,7 +53,22 @@ DEFAULTS: Dict[str, Any] = {
     "max_tokens": None,  # None = Automático (calculado por modelo)
     "stream": True,
     "show_tray_icon": False,
+    # Esforço de raciocínio ("pensamento") pedido ao modelo. "auto" = não
+    # manda o parâmetro e deixa cada modelo usar o próprio padrão — é o que
+    # mais se aproxima do comportamento do chat no navegador.
+    "reasoning_effort": "auto",
+    # Critério de escolha do provedor no OpenRouter. "" = padrão do
+    # OpenRouter (prioriza preço); "throughput" = mais tokens/s;
+    # "latency" = primeira resposta mais rápida.
+    "provider_sort": "",
 }
+
+# Valores aceitos em "reasoning_effort". "none" desliga o raciocínio (em
+# modelos onde ele é obrigatório o app troca pelo menor nível aceito).
+REASONING_EFFORT_CHOICES = ("auto", "none", "minimal", "low", "medium", "high")
+
+# Valores aceitos em "provider_sort" (ver provider routing do OpenRouter).
+PROVIDER_SORT_CHOICES = ("", "throughput", "latency", "price")
 
     
 
@@ -192,6 +207,26 @@ class Config:
     @property
     def show_tray_icon(self) -> bool:
         return bool(self.get("show_tray_icon", False))
+
+    @property
+    def reasoning_effort(self) -> str:
+        value = str(self.get("reasoning_effort", "auto") or "auto").strip().lower()
+        return value if value in REASONING_EFFORT_CHOICES else "auto"
+
+    @reasoning_effort.setter
+    def reasoning_effort(self, value: str) -> None:
+        value = str(value or "auto").strip().lower()
+        self.set("reasoning_effort", value if value in REASONING_EFFORT_CHOICES else "auto")
+
+    @property
+    def provider_sort(self) -> str:
+        value = str(self.get("provider_sort", "") or "").strip().lower()
+        return value if value in PROVIDER_SORT_CHOICES else ""
+
+    @provider_sort.setter
+    def provider_sort(self, value: str) -> None:
+        value = str(value or "").strip().lower()
+        self.set("provider_sort", value if value in PROVIDER_SORT_CHOICES else "")
 
     def is_configured(self) -> bool:
         """True se há chave da API suficiente para usar o app."""
