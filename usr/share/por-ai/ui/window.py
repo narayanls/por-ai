@@ -16,6 +16,7 @@ from __future__ import annotations
 import logging
 import os
 import time
+import unicodedata
 from typing import Any, Dict, List, Optional
 import gi
 
@@ -62,9 +63,8 @@ except Exception as _exc:  # pylint: disable=broad-except
     logger.warning("Recurso de atualização desativado: %s", _exc, exc_info=True)
     _UPDATE_AVAILABLE = False
 
-# Versão embutida do app — fonte única, usada na janela "Sobre" e como
-# fallback do verificador de updates quando o version.txt não existe.
-APP_VERSION = "0.1.9.1"
+
+APP_VERSION = "0.1.9.2"
 
 _CSS = b"""
 .message-bubble {
@@ -121,6 +121,20 @@ class PorAiWindow(Adw.ApplicationWindow):
         # bolha — o raciocínio destacado como bloco de citação.
         self._streaming_reasoning: str = ""
         self._streaming_content: str = ""
+        # Renderização do streaming com frequência limitada: os pedaços que
+        # chegam só vão para os acumuladores acima, e um timer redesenha a
+        # bolha no máximo ~12x por segundo (ver _schedule_stream_render).
+        self._render_source_id: int = 0
+        # Momentos (time.monotonic) do início e fim do raciocínio, para
+        # mostrar "Pensou por N s" na bolha.
+        self._reasoning_started_at: Optional[float] = None
+        self._reasoning_ended_at: Optional[float] = None
+        # Busca dentro da conversa: lista de ocorrências (bolha, índice
+        # local), ocorrências por bolha e a ocorrência selecionada.
+        self._chat_search_hits: List[tuple] = []
+        self._chat_search_ranges: Dict[MessageRow, List[tuple]] = {}
+        self._chat_search_index: int = -1
+        self._chat_search_current_row: Optional[MessageRow] = None
         # Provider CSS do esquema de cores ativo (None = tema do sistema).
         self._scheme_provider: Optional[Gtk.CssProvider] = None
         self.connect("close-request", self._on_close_request)
@@ -138,6 +152,10 @@ class PorAiWindow(Adw.ApplicationWindow):
 
         # Foca o campo de entrada assim que a janela aparecer na tela.
         self.connect("map", lambda *_: self._input_view.grab_focus())
+
+        # Baixa o catálogo de modelos em segundo plano, para a primeira
+        # mensagem não ter que esperar por ele (ver prewarm_model_cache).
+        GLib.timeout_add_seconds(1, self._prewarm_models)
 
         #Verifica atualizações silenciosamente
         if _UPDATE_AVAILABLE:
@@ -176,6 +194,7 @@ class PorAiWindow(Adw.ApplicationWindow):
             "color-scheme": self._on_color_scheme,
             "about": self._on_about,
             "check-update": self._on_check_update,
+            "search-chat": self._on_search_chat_action,
         }
         for name, callback in actions.items():
             action = Gio.SimpleAction.new(name, None)
@@ -190,6 +209,7 @@ class PorAiWindow(Adw.ApplicationWindow):
         # Conteúdo (chat) à direita.
         content_view = Adw.ToolbarView()
         content_view.add_top_bar(self._build_header())
+        content_view.add_top_bar(self._build_chat_search_bar())
         content_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
         content_box.append(self._build_chat_area())
         content_box.append(self._build_input_area())
@@ -279,6 +299,12 @@ class PorAiWindow(Adw.ApplicationWindow):
         menu_button.set_menu_model(menu)
         menu_button.set_tooltip_text("Menu")
         header.pack_end(menu_button)
+
+        # Busca dentro da conversa aberta (Ctrl+F). Fica à esquerda do menu.
+        self._chat_search_button = Gtk.ToggleButton()
+        self._chat_search_button.set_icon_name("edit-find-symbolic")
+        self._chat_search_button.set_tooltip_text("Buscar nesta conversa (Ctrl+F)")
+        header.pack_end(self._chat_search_button)
 
         return header
 
@@ -941,6 +967,12 @@ class PorAiWindow(Adw.ApplicationWindow):
         self._messages_box.append(self._streaming_row)
         self._streaming_reasoning = ""
         self._streaming_content = ""
+        self._reasoning_started_at = None
+        self._reasoning_ended_at = None
+        # Sinal visível de que o pedido saiu — modelos lentos podem levar
+        # vários segundos até o primeiro token, e a bolha vazia parecia
+        # travamento. É substituído pelo primeiro pedaço que chegar.
+        self._streaming_row.set_text("_Aguardando o modelo…_")
 
         self._clear_input()
         self._set_busy(True)
@@ -988,11 +1020,24 @@ class PorAiWindow(Adw.ApplicationWindow):
             self._toast("Já existe uma resposta em andamento.")
 
 
+    # Limites da renderização ao vivo. Antes, CADA pedaço vindo da rede
+    # (dezenas por segundo) disparava a reconversão do texto inteiro de
+    # Markdown para markup, a validação do markup e o relayout do label —
+    # trabalho que cresce com o tamanho da resposta, tudo na thread da
+    # interface. Com raciocínios longos isso ocupava a thread principal
+    # quase o tempo todo e a janela ficava lenta. A rede já roda em outra
+    # thread (ChatAssistant._worker); o gargalo era o redesenho.
+    _STREAM_RENDER_MS = 80          # ~12 quadros/s em respostas curtas
+    _STREAM_RENDER_MS_LONG = 200    # respostas longas: redesenho mais espaçado
+    _STREAM_LONG_CHARS = 8000
+    _REASONING_TAIL_CHARS = 1500    # só o fim do raciocínio aparece ao vivo
+
     def _on_delta(self, chunk: str) -> bool:
         if self._streaming_row is not None:
+            if chunk and self._reasoning_started_at and not self._reasoning_ended_at:
+                self._reasoning_ended_at = time.monotonic()
             self._streaming_content += chunk
-            self._render_streaming_row()
-            self._scroll_to_bottom()
+            self._schedule_stream_render()
         return False  # GLib.idle_add: não repetir
 
     def _on_reasoning(self, chunk: str) -> bool:
@@ -1002,10 +1047,34 @@ class PorAiWindow(Adw.ApplicationWindow):
         final. Sem isso a bolha ficava muda até o modelo terminar de
         "pensar" e só então despejar tudo de uma vez."""
         if self._streaming_row is not None:
+            if chunk and self._reasoning_started_at is None:
+                self._reasoning_started_at = time.monotonic()
             self._streaming_reasoning += chunk
-            self._render_streaming_row()
-            self._scroll_to_bottom()
+            self._schedule_stream_render()
         return False
+
+    def _schedule_stream_render(self) -> None:
+        """Agenda um redesenho da bolha, se ainda não houver um pendente.
+        Vários pedaços que chegam no intervalo viram um redesenho só."""
+        if self._render_source_id:
+            return
+        delay = (
+            self._STREAM_RENDER_MS_LONG
+            if len(self._streaming_content) > self._STREAM_LONG_CHARS
+            else self._STREAM_RENDER_MS
+        )
+        self._render_source_id = GLib.timeout_add(delay, self._flush_stream_render)
+
+    def _flush_stream_render(self) -> bool:
+        self._render_source_id = 0
+        self._render_streaming_row()
+        self._scroll_to_bottom()
+        return False
+
+    def _cancel_stream_render(self) -> None:
+        if self._render_source_id:
+            GLib.source_remove(self._render_source_id)
+            self._render_source_id = 0
 
     def _render_streaming_row(self) -> None:
         """Remonta o texto (markdown) da bolha em construção a partir dos
@@ -1016,13 +1085,38 @@ class PorAiWindow(Adw.ApplicationWindow):
         if self._streaming_row is None:
             return
         parts: List[str] = []
-        if self._streaming_reasoning:
-            lines = self._streaming_reasoning.strip("\n").splitlines() or [""]
+        if self._streaming_reasoning and self._streaming_content:
+            # A resposta já começou: o raciocínio vira uma linha só. (Ele
+            # nunca foi guardado no histórico — on_done troca a bolha pelo
+            # texto final —, então nada se perde.)
+            parts.append(f"_💭 {self._reasoning_duration_label()}_")
+        elif self._streaming_reasoning:
+            # Mostra só o final do raciocínio: o custo de renderizar fica
+            # constante em vez de crescer a cada pedaço, e é a parte que
+            # interessa acompanhar ao vivo.
+            reasoning = self._streaming_reasoning.strip("\n")
+            if len(reasoning) > self._REASONING_TAIL_CHARS:
+                tail = reasoning[-self._REASONING_TAIL_CHARS:]
+                newline = tail.find("\n")
+                if 0 <= newline < 200:
+                    tail = tail[newline + 1:]
+                reasoning = "…\n" + tail
+            lines = reasoning.splitlines() or [""]
             quoted = "\n".join(f"> {line}" if line else ">" for line in lines)
-            parts.append(f"**💭 Pensando…**\n{quoted}")
+            parts.append(f"**💭 {self._reasoning_duration_label()}**\n{quoted}")
         if self._streaming_content:
             parts.append(self._streaming_content)
-        self._streaming_row.set_text("\n\n".join(parts))
+        if parts:
+            self._streaming_row.set_text("\n\n".join(parts))
+
+    def _reasoning_duration_label(self) -> str:
+        if self._reasoning_started_at is None:
+            return "Pensando…"
+        end = self._reasoning_ended_at or time.monotonic()
+        seconds = max(0, int(end - self._reasoning_started_at))
+        if self._reasoning_ended_at is not None:
+            return f"Pensou por {seconds} s"
+        return f"Pensando… ({seconds} s)"
 
     def _on_retry(self, attempt: int, total: int, delay: float) -> bool:
         """Chamado quando uma falha transitória (timeout, queda de conexão,
@@ -1080,6 +1174,7 @@ class PorAiWindow(Adw.ApplicationWindow):
         return history
 
     def _on_done(self, full_text: str, raw_text: str = "") -> bool:
+        self._cancel_stream_render()
         if self._streaming_row is not None:
             if not full_text.strip():
                 self._streaming_row.set_text("(resposta vazia ou cancelada)")
@@ -1104,9 +1199,12 @@ class PorAiWindow(Adw.ApplicationWindow):
         return False
 
     def _on_error(self, message: str) -> bool:
+        self._cancel_stream_render()
         if self._streaming_row is not None:
+            # Aplica o que ficou pendente no timer antes de anexar o erro.
+            self._render_streaming_row()
             current = self._streaming_row.get_text().strip()
-            if current:
+            if self._streaming_reasoning or self._streaming_content:
                 # Já havia algo na bolha (tipicamente o raciocínio, que
                 # sozinho pareceria uma resposta legítima se ficasse sem
                 # marcação). Anexa o erro ali mesmo — o toast some em
@@ -1162,6 +1260,242 @@ class PorAiWindow(Adw.ApplicationWindow):
             return False
 
         GLib.idle_add(scroll)
+
+    # ------------------------------------------------------------------ #
+    # Busca dentro da conversa                                             #
+    # ------------------------------------------------------------------ #
+
+    def _build_chat_search_bar(self) -> Gtk.Widget:
+        self._chat_search_entry = Gtk.SearchEntry()
+        self._chat_search_entry.set_placeholder_text("Buscar nesta conversa…")
+        self._chat_search_entry.set_hexpand(True)
+        self._chat_search_entry.connect("search-changed", self._on_chat_search_changed)
+        # Enter / Ctrl+G = próxima; Shift+Enter / Ctrl+Shift+G = anterior.
+        self._chat_search_entry.connect("activate", lambda *_: self._chat_search_step(1))
+        self._chat_search_entry.connect("next-match", lambda *_: self._chat_search_step(1))
+        self._chat_search_entry.connect(
+            "previous-match", lambda *_: self._chat_search_step(-1)
+        )
+        self._chat_search_entry.connect(
+            "stop-search", lambda *_: self._chat_search_button.set_active(False)
+        )
+        shift_enter = Gtk.EventControllerKey()
+        shift_enter.set_propagation_phase(Gtk.PropagationPhase.CAPTURE)
+        shift_enter.connect("key-pressed", self._on_chat_search_key)
+        self._chat_search_entry.add_controller(shift_enter)
+
+        self._chat_search_count = Gtk.Label()
+        self._chat_search_count.add_css_class("caption")
+        self._chat_search_count.add_css_class("dim-label")
+        self._chat_search_count.set_width_chars(8)
+
+        prev_button = Gtk.Button()
+        prev_button.set_icon_name("go-up-symbolic")
+        prev_button.set_tooltip_text("Anterior (Shift+Enter)")
+        prev_button.add_css_class("flat")
+        prev_button.connect("clicked", lambda *_: self._chat_search_step(-1))
+
+        next_button = Gtk.Button()
+        next_button.set_icon_name("go-down-symbolic")
+        next_button.set_tooltip_text("Próxima (Enter)")
+        next_button.add_css_class("flat")
+        next_button.connect("clicked", lambda *_: self._chat_search_step(1))
+
+        box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=6)
+        box.append(self._chat_search_entry)
+        box.append(self._chat_search_count)
+        box.append(prev_button)
+        box.append(next_button)
+
+        clamp = Adw.Clamp()
+        clamp.set_maximum_size(640)
+        clamp.set_child(box)
+
+        self._chat_search_bar = Gtk.SearchBar()
+        self._chat_search_bar.set_child(clamp)
+        self._chat_search_bar.connect_entry(self._chat_search_entry)
+        self._chat_search_button.bind_property(
+            "active",
+            self._chat_search_bar,
+            "search-mode-enabled",
+            GObject.BindingFlags.SYNC_CREATE | GObject.BindingFlags.BIDIRECTIONAL,
+        )
+        self._chat_search_bar.connect(
+            "notify::search-mode-enabled", self._on_chat_search_mode_changed
+        )
+        return self._chat_search_bar
+
+    def _on_search_chat_action(self, *_args) -> None:
+        """Ctrl+F: abre a busca (ou, se já aberta, só devolve o foco)."""
+        if self._chat_search_bar.get_search_mode():
+            self._chat_search_entry.grab_focus()
+            self._chat_search_entry.select_region(0, -1)
+        else:
+            self._chat_search_button.set_active(True)
+
+    def _on_chat_search_mode_changed(self, bar: Gtk.SearchBar, _pspec) -> None:
+        if bar.get_search_mode():
+            GLib.idle_add(lambda: self._chat_search_entry.grab_focus() and False)
+            self._run_chat_search()
+        else:
+            self._clear_chat_search()
+            self._input_view.grab_focus()
+
+    def _on_chat_search_key(self, _controller, keyval, _keycode, state) -> bool:
+        if keyval in (Gdk.KEY_Return, Gdk.KEY_KP_Enter) and (
+            state & Gdk.ModifierType.SHIFT_MASK
+        ):
+            self._chat_search_step(-1)
+            return True
+        return False
+
+    def _on_chat_search_changed(self, _entry: Gtk.SearchEntry) -> None:
+        self._run_chat_search()
+
+    def _refresh_chat_search(self) -> None:
+        """Refaz a busca após a conversa mudar (se a barra estiver aberta)."""
+        self._chat_search_ranges = {}
+        self._chat_search_hits = []
+        self._chat_search_index = -1
+        self._chat_search_current_row = None
+        if getattr(self, "_chat_search_bar", None) is not None and (
+            self._chat_search_bar.get_search_mode()
+        ):
+            self._run_chat_search()
+
+    @staticmethod
+    def _fold_for_search(text: str) -> str:
+        """Minúsculas e sem acento, caractere a caractere — "Você" casa com
+        "voce". Mantém exatamente um caractere de saída por caractere de
+        entrada, para as posições encontradas valerem no texto original."""
+        folded = []
+        for char in text:
+            base = unicodedata.normalize("NFD", char)[0].lower()
+            folded.append(base[0] if base else char)
+        return "".join(folded)
+
+    def _iter_message_rows(self):
+        child = self._messages_box.get_first_child()
+        while child is not None:
+            if isinstance(child, MessageRow):
+                yield child
+            child = child.get_next_sibling()
+
+    def _clear_chat_search(self) -> None:
+        # Varre todas as bolhas, não só as que estão no dicionário de
+        # resultados: garante que nenhum destaque fique para trás.
+        for row in self._iter_message_rows():
+            row.clear_search_highlights()
+        self._chat_search_current_row = None
+        self._chat_search_ranges = {}
+        self._chat_search_hits = []
+        self._chat_search_index = -1
+        self._chat_search_count.set_text("")
+        self._chat_search_entry.remove_css_class("error")
+
+    def _run_chat_search(self) -> None:
+        query = self._fold_for_search(self._chat_search_entry.get_text().strip())
+        self._clear_chat_search()
+        if not query:
+            return
+
+        for row in self._iter_message_rows():
+            # A bolha que ainda está recebendo texto muda a cada instante;
+            # ela entra na busca quando a resposta terminar.
+            if row is self._streaming_row:
+                continue
+            text = row.get_display_text()
+            cache = getattr(row, "_search_fold_cache", None)
+            if cache is not None and cache[0] == text:
+                folded = cache[1]
+            else:
+                folded = self._fold_for_search(text)
+                row._search_fold_cache = (text, folded)
+
+            ranges: List[tuple] = []
+            start = folded.find(query)
+            while start != -1:
+                ranges.append((start, start + len(query)))
+                start = folded.find(query, start + len(query))
+            if ranges:
+                self._chat_search_ranges[row] = ranges
+                row.set_search_highlights(ranges)
+                self._chat_search_hits.extend((row, i) for i in range(len(ranges)))
+
+        if not self._chat_search_hits:
+            self._chat_search_count.set_text("Nenhum")
+            self._chat_search_entry.add_css_class("error")
+            return
+
+        # Começa na primeira ocorrência a partir do ponto da conversa que
+        # está na tela, como no Ctrl+F do navegador.
+        view_top = self._scroller.get_vadjustment().get_value()
+        self._chat_search_index = 0
+        for index, (row, local) in enumerate(self._chat_search_hits):
+            y = self._chat_search_hit_y(row, local)
+            if y is not None and y >= view_top:
+                self._chat_search_index = index
+                break
+        self._focus_chat_search_hit()
+
+    def _chat_search_step(self, direction: int) -> None:
+        if not self._chat_search_hits:
+            return
+        total = len(self._chat_search_hits)
+        self._chat_search_index = (self._chat_search_index + direction) % total
+        self._focus_chat_search_hit()
+
+    def _focus_chat_search_hit(self) -> None:
+        if not (0 <= self._chat_search_index < len(self._chat_search_hits)):
+            return
+        row, local = self._chat_search_hits[self._chat_search_index]
+        # Repinta só onde muda algo: a bolha que tinha a ocorrência atual
+        # (volta a ficar toda em amarelo) e a que passa a ter (laranja).
+        previous = self._chat_search_current_row
+        if previous is not None and previous is not row:
+            ranges = self._chat_search_ranges.get(previous)
+            if ranges:
+                previous.set_search_highlights(ranges)
+        row.set_search_highlights(self._chat_search_ranges[row], local)
+        self._chat_search_current_row = row
+        self._chat_search_count.set_text(
+            f"{self._chat_search_index + 1} de {len(self._chat_search_hits)}"
+        )
+
+        y = self._chat_search_hit_y(row, local)
+        if y is None:
+            return
+        adj = self._scroller.get_vadjustment()
+        # Deixa a ocorrência a ~1/3 da altura da tela, com contexto acima.
+        target = y - adj.get_page_size() / 3
+        target = max(adj.get_lower(), min(target, adj.get_upper() - adj.get_page_size()))
+        adj.set_value(target)
+
+    def _chat_search_hit_y(self, row: MessageRow, local: int) -> Optional[float]:
+        """Posição vertical da ocorrência dentro da área de mensagens."""
+        ranges = self._chat_search_ranges.get(row)
+        if not ranges or local >= len(ranges):
+            return None
+        widget, y = row.search_match_point(ranges[local][0])
+        # compute_point é a API do GTK 4.12+; translate_coordinates é a
+        # antiga (obsoleta, mas presente em versões mais velhas).
+        try:
+            from gi.repository import Graphene
+
+            point = Graphene.Point()
+            point.x, point.y = 0.0, float(y)
+            ok, out = widget.compute_point(self._messages_box, point)
+            if ok:
+                return out.y
+        except (ImportError, AttributeError, ValueError, TypeError):
+            pass
+        try:
+            result = widget.translate_coordinates(self._messages_box, 0, y)
+            if result and result[0]:
+                return result[2]
+        except (AttributeError, TypeError):
+            pass
+        return None
 
     # ------------------------------------------------------------------ #
     # Anexos                                                               #
@@ -1344,6 +1678,7 @@ class PorAiWindow(Adw.ApplicationWindow):
         """Limpa a área de chat e o estado da conversa atual (sem apagar disco)."""
         if self.assistant.is_busy():
             self.assistant.cancel()
+        self._cancel_stream_render()
         self._streaming_row = None
         self._messages = []
         self._current_conv_id = None
@@ -1359,6 +1694,7 @@ class PorAiWindow(Adw.ApplicationWindow):
         self._placeholder = None
         self._show_placeholder()
         self._set_busy(False)
+        self._refresh_chat_search()
 
         # O grab_focus precisa esperar o reset da UI terminar; feito na hora,
         # o widget ainda não está mapeado e o foco não gruda.
@@ -1524,6 +1860,7 @@ class PorAiWindow(Adw.ApplicationWindow):
 
         if self.assistant.is_busy():
             self.assistant.cancel()
+        self._cancel_stream_render()
         self._streaming_row = None
         self._clear_attachments()
 
@@ -1565,6 +1902,10 @@ class PorAiWindow(Adw.ApplicationWindow):
         self._set_busy(False)
         self._scroll_to_bottom(force=True)
         GLib.idle_add(lambda: self._input_view.grab_focus() and False)
+        # Com a busca aberta, procura o mesmo termo na conversa recém-aberta.
+        # Espera o layout das bolhas novas para conseguir rolar até o
+        # resultado.
+        GLib.idle_add(lambda: self._refresh_chat_search() and False)
 
     def _on_delete_conv(self, conv_id: str) -> None:
         self.store.delete(conv_id)
@@ -1725,6 +2066,12 @@ class PorAiWindow(Adw.ApplicationWindow):
         self._select_model(current if current in models else self.config.default_model)
         # Aplica imediatamente a mudança da preferência de bandeja.
         self.get_application().apply_tray_setting()
+        # A chave da API pode ter mudado (ou sido definida agora).
+        self._prewarm_models()
+
+    def _prewarm_models(self) -> bool:
+        self.assistant.prewarm_model_cache()
+        return False
 
     def _on_about(self, *_args) -> None:
         about = Adw.AboutWindow(

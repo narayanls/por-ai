@@ -9,6 +9,7 @@ from __future__ import annotations
 import logging
 import os
 import sys
+import signal
 
 # Permite importar os pacotes locais (core/ e ui/) independentemente do
 # diretório de trabalho a partir do qual o app foi iniciado.
@@ -31,13 +32,6 @@ logger = logging.getLogger(__name__)
 # --------------------------------------------------------------------- #
 # Método de entrada (acentos e dead keys)                                #
 # --------------------------------------------------------------------- #
-#
-# A partir do GTK 4.19 o suporte a método de entrada no Wayland é delegado
-# ao protocolo de texto do compositor, e o GTK deixou de fazer compose e
-# dead keys do lado do cliente. Compositores wlroots (niri, Hyprland, sway…)
-# não implementam esse protocolo, então em uma sessão sem IME rodando os
-# acentos simplesmente param de funcionar. Nesses casos forçamos o módulo
-# "simple", que traz de volta a implementação de compose do próprio GTK.
 #
 # Nunca usar "xim": não é suportado pelo GTK4 e faz teclas de edição serem
 # entregues como texto bruto.
@@ -108,21 +102,11 @@ class PorAiApplication(Adw.Application):
     def __init__(self) -> None:
         super().__init__(
             application_id=APPLICATION_ID,
-            # HANDLES_OPEN permite ser chamado com arquivos (ex.: "por-ai a.pdf"
-            # ou "Abrir com…" no gerenciador de arquivos). Sem isso, qualquer
-            # argumento vira "arquivo para abrir" e o GIO recusa, sem abrir a
-            # janela ("This application can not open files").
             flags=Gio.ApplicationFlags.HANDLES_OPEN,
         )
         self.config = Config()
         self._window: PorAiWindow | None = None
         self._tray: TrayIcon | None = None
-        # Rastreia se hold() está ativo, já que apply_tray_setting() chama
-        # hold() de forma otimista, antes de saber se o registro assíncrono
-        # da bandeja no D-Bus (ver tray.py) realmente vai dar certo. Sem essa
-        # flag, um hold()/release() desbalanceado no caminho de erro
-        # (_on_tray_unavailable) prendia o app vivo mesmo sem bandeja
-        # nenhuma funcionando.
         self._tray_held = False
 
     def do_startup(self) -> None:
@@ -131,6 +115,7 @@ class PorAiApplication(Adw.Application):
         # Atalhos de teclado.
         self.set_accels_for_action("win.new-chat", ["<Control>n"])
         self.set_accels_for_action("win.preferences", ["<Control>comma"])
+        self.set_accels_for_action("win.search-chat", ["<Control>f"])
         self.set_accels_for_action("window.close", ["<Control>w"])
         print("[tray] do_startup -> chamando apply_tray_setting", flush=True)
         # Cria o ícone da bandeja, se a preferência estiver ativa.
@@ -188,9 +173,7 @@ class PorAiApplication(Adw.Application):
                 debug=True,
             )
             self._tray.register()
-            # Mantém o processo vivo mesmo com a janela oculta. Chamado de
-            # forma otimista aqui — se o registro assíncrono falhar depois,
-            # _on_tray_unavailable desfaz isso.
+            # Mantém o processo vivo mesmo com a janela oculta.
             if not self._tray_held:
                 self.hold()
                 self._tray_held = True
@@ -227,26 +210,31 @@ class PorAiApplication(Adw.Application):
             "barramento. No GNOME, instale a extensão 'AppIndicator and "
             "KStatusNotifierItem Support' para ver o ícone."
         )
-        # apply_tray_setting() já tinha assumido sucesso (self._tray setado,
-        # hold() chamado) antes desta confirmação assíncrona chegar. Como o
-        # registro de fato falhou, não existe ícone nenhum — desfazemos esse
-        # estado para o app não ficar "preso" vivo por um hold() órfão.
+
         if self._tray is not None:
             self._tray.unregister()
             self._tray = None
         if self._tray_held:
             self.release()
             self._tray_held = False
-        # Sem bandeja de verdade, se a janela estiver oculta ela ficaria
-        # inacessível — traz de volta, igual ao ramo de remoção manual.
         if self._window is not None and not self._window.get_visible():
             self._window.present()
 
 
+
 def main() -> int:
     app = PorAiApplication()
-    return app.run(sys.argv)
 
+    def _quit_on_signal(*_args) -> None:
+        GLib.idle_add(app.quit)
+
+    signal.signal(signal.SIGINT, _quit_on_signal)
+    signal.signal(signal.SIGTERM, _quit_on_signal)
+
+    try:
+        return app.run(sys.argv)
+    except KeyboardInterrupt:
+        return 130  # código convencional de "interrompido por Ctrl+C"
 
 if __name__ == "__main__":
     sys.exit(main())

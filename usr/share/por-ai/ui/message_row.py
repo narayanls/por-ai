@@ -119,6 +119,9 @@ class MessageRow(Gtk.Box):
 
     def set_text(self, text: str) -> None:
         self._text = text
+        # Os destaques da busca usam posições do texto antigo; com o texto
+        # trocado eles cairiam no lugar errado.
+        self.clear_search_highlights()
         if self._is_assistant:
             self._set_markup(text)
         else:
@@ -126,6 +129,7 @@ class MessageRow(Gtk.Box):
 
     def append_text(self, chunk: str) -> None:
         self._text += chunk
+        self.clear_search_highlights()
         if self._is_assistant:
             self._set_markup(self._text)
         else:
@@ -133,6 +137,91 @@ class MessageRow(Gtk.Box):
 
     def get_text(self) -> str:
         return self._text
+
+    # ------------------------------------------------------------------ #
+    # Busca na conversa                                                    #
+    # ------------------------------------------------------------------ #
+
+    # Cores dos destaques (Pango usa 16 bits por canal). Texto sempre
+    # preto por cima, para ficar legível tanto no tema claro quanto no
+    # escuro e também na bolha do usuário (fundo com a cor de destaque).
+    _HL_MATCH = (0xF6F6, 0xD3D3, 0x2D2D)    # amarelo: todas as ocorrências
+    _HL_CURRENT = (0xFFFF, 0x7878, 0x0000)  # laranja: ocorrência atual
+
+    def get_display_text(self) -> str:
+        """Texto como aparece na tela (sem Markdown nem markup) — é nele
+        que a busca procura, para que as posições batam com o que o usuário
+        vê. ``Gtk.Label.get_text()`` já devolve o texto sem o markup."""
+        return self._label.get_text()
+
+    def set_search_highlights(
+        self, ranges: List[tuple], current: Optional[int] = None
+    ) -> None:
+        """Destaca as ocorrências ``ranges`` ([(início, fim), ...] em
+        caracteres do texto exibido). ``current`` é o índice, dentro de
+        ``ranges``, da ocorrência selecionada agora."""
+        if not ranges:
+            self.clear_search_highlights()
+            return
+        # Recomeça de um layout limpo antes de aplicar os destaques novos
+        # (ver clear_search_highlights).
+        self.clear_search_highlights()
+        text = self._label.get_text()
+        attrs = Pango.AttrList()
+        for index, (start, end) in enumerate(ranges):
+            # Pango trabalha com posições em BYTES de UTF-8, não caracteres.
+            byte_start = len(text[:start].encode("utf-8"))
+            byte_end = byte_start + len(text[start:end].encode("utf-8"))
+            color = self._HL_CURRENT if index == current else self._HL_MATCH
+            background = Pango.attr_background_new(*color)
+            background.start_index = byte_start
+            background.end_index = byte_end
+            attrs.insert(background)
+            foreground = Pango.attr_foreground_new(0, 0, 0)
+            foreground.start_index = byte_start
+            foreground.end_index = byte_end
+            attrs.insert(foreground)
+        # Os atributos são aplicados por cima do markup já existente.
+        self._label.set_attributes(attrs)
+        self._has_search_highlights = True
+
+    def clear_search_highlights(self) -> None:
+        """Remove os destaques da busca.
+
+        Só ``set_attributes(None)`` não basta: em labels com markup, o GTK
+        mescla os atributos manuais com os do markup, e os destaques
+        continuavam na tela (e se acumulavam a cada tecla digitada na
+        busca) até a bolha ser recriada. É preciso obrigar o label a
+        refazer o markup do zero.
+
+        NÃO REMOVA o ``set_markup("")``: o GTK ignora ``set_markup`` quando
+        o texto é idêntico ao atual, então reaplicar o mesmo markup direto
+        não refaz nada — foi exatamente o que falhou na primeira correção.
+        Esvaziar antes garante que o texto "mudou" e o markup é reprocessado.
+        """
+        if not getattr(self, "_has_search_highlights", False):
+            return
+        self._has_search_highlights = False
+        self._label.set_attributes(None)
+        if self._is_assistant:
+            self._label.set_markup("")
+            self._set_markup(self._text)
+        else:
+            self._label.set_text("")
+            self._label.set_text(self._text)
+
+    def search_match_point(self, start: int) -> Optional[tuple]:
+        """Devolve ``(widget, y)``: a posição vertical da ocorrência que
+        começa no caractere ``start``, em coordenadas do label — usada pela
+        janela para rolar até a linha exata, não só até o topo da bolha."""
+        text = self._label.get_text()
+        index = len(text[:start].encode("utf-8"))
+        try:
+            rect = self._label.get_layout().index_to_pos(index)
+            _x, offset_y = self._label.get_layout_offsets()
+            return self._label, offset_y + rect.y / Pango.SCALE
+        except Exception:  # pylint: disable=broad-except
+            return self._label, 0.0
 
     # ------------------------------------------------------------------ #
     # Internos                                                             #
