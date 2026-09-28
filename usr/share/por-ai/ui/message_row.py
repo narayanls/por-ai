@@ -84,6 +84,7 @@ class MessageRow(Gtk.Box):
 
         self._label = Gtk.Label()
         self._label.set_wrap(True)
+        self._label.set_wrap_mode(Pango.WrapMode.WORD_CHAR)
         self._label.set_xalign(0.0)
         self._label.set_halign(Gtk.Align.START)
         self._label.set_max_width_chars(80)
