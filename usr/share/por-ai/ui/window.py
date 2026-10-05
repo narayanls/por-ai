@@ -399,29 +399,17 @@ class PorAiWindow(Adw.ApplicationWindow):
         self._messages_box.set_valign(Gtk.Align.START)
 
         self._scroller = Gtk.ScrolledWindow()
-        self._scroller.set_policy(Gtk.PolicyType.NEVER, Gtk.PolicyType.AUTOMATIC)
+        self._scroller.set_policy(
+            Gtk.PolicyType.AUTOMATIC, Gtk.PolicyType.AUTOMATIC
+        )
         self._scroller.set_vexpand(True)
         self._scroller.set_child(self._messages_box)
 
-        # O ScrolledWindow envolve o messages_box (que não é Gtk.Scrollable)
-        # num Gtk.Viewport interno automaticamente. Esse Viewport tem a
-        # propriedade "scroll-to-focus" (GTK 4.12+), True por padrão: sempre
-        # que um widget filho ganha foco de teclado, ele reajusta a rolagem
-        # pra garantir que o widget fique visível — mesmo que já esteja. O
-        # Gtk.Label de cada resposta pede foco como parte do próprio gesto
-        # de iniciar uma seleção de texto (can_focus=True), então isso
-        # empurrava a rolagem uns pixels bem no momento do clique,
-        # interrompendo o clique-e-arrasto — daí precisar clicar 2x (no
-        # segundo clique o label já estava focado, então nada se mexia).
+
         viewport = self._scroller.get_child()
         if isinstance(viewport, Gtk.Viewport) and hasattr(viewport, "set_scroll_to_focus"):
             viewport.set_scroll_to_focus(False)
 
-        # Rastreia se o usuário está com o botão do mouse pressionado dentro
-        # da área de mensagens (ex.: arrastando pra selecionar texto). Enquanto
-        # isso for verdade, _scroll_to_bottom() não deve mexer na rolagem —
-        # senão um chunk de streaming chegando no meio do gesto de seleção
-        # puxa a view pro fim e cancela a seleção em andamento.
         self._user_selecting = False
         click_gesture = Gtk.GestureClick()
         click_gesture.set_button(0)  # qualquer botão

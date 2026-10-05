@@ -176,8 +176,8 @@ THEMES: Dict[str, Dict] = {
     },
     "lava-blue-light": {
         "label": "Lava Blue (Claro)",
-        "bg": "#f4f6fb",
-        "bg_dim": "#e2e8f2",
+        "bg": "#d8e2fd",
+        "bg_dim": "#b8c2dc",
         "surface": "#ffffff",
         "fg": "#1a2233",
         "accent": "#fdaf00",
@@ -196,9 +196,9 @@ THEMES: Dict[str, Dict] = {
     },
     "pink-tt-light": {
         "label": "Pink TT (Claro)",
-        "bg": "#fff7ff",
-        "bg_dim": "#fff7ff",
-        "surface": "#ffffff",
+        "bg": "#ffcaef",
+        "bg_dim": "#ddaace",
+        "surface": "#fff4ff",
         "fg": "#143437",
         "accent": "#007f7d",
         "accent_fg": "#ffffff",
