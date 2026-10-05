@@ -137,8 +137,12 @@ class PorAiWindow(Adw.ApplicationWindow):
         self._chat_search_current_row: Optional[MessageRow] = None
         # Provider CSS do esquema de cores ativo (None = tema do sistema).
         self._scheme_provider: Optional[Gtk.CssProvider] = None
-        # Balão de primeira execução apontando para o menu (None = fechado).
-        self._models_hint: Optional[Gtk.Popover] = None
+        # Balão guia de primeira execução aberto no momento (None = fechado).
+        # Só existe um por vez — ver "Guia de primeira execução".
+        self._hint: Optional[Gtk.Popover] = None
+        # True entre o balão do menu (Preferências/Temas) e o do seletor de
+        # modelo, que vem logo depois dele.
+        self._model_hint_pending = False
         self.connect("close-request", self._on_close_request)
 
 
@@ -301,12 +305,15 @@ class PorAiWindow(Adw.ApplicationWindow):
         menu_button.set_menu_model(menu)
         menu_button.set_tooltip_text("Menu")
         header.pack_end(menu_button)
-        # Guardado para ancorar o balão de primeira execução (ver
-        # _show_models_hint). O balão some sozinho quando o menu é aberto.
+        # Guardado para ancorar os balões de primeira execução (ver
+        # _show_hint). O balão some sozinho quando o menu é aberto e, se
+        # ainda faltar o balão do seletor de modelo, ele vem quando o menu
+        # fechar.
         self._menu_button = menu_button
         menu_popover = menu_button.get_popover()
         if menu_popover is not None:
-            menu_popover.connect("map", self._dismiss_models_hint)
+            menu_popover.connect("map", self._dismiss_hint)
+            menu_popover.connect("closed", self._on_menu_popover_closed)
 
         # Busca dentro da conversa aberta (Ctrl+F). Fica à esquerda do menu.
         self._chat_search_button = Gtk.ToggleButton()
@@ -732,6 +739,8 @@ class PorAiWindow(Adw.ApplicationWindow):
         popover = Gtk.Popover()
         popover.set_size_request(320, -1)
         popover.connect("map", self._on_model_popover_show)
+        # Abrir o seletor encerra o guia: quem chegou aqui já o encontrou.
+        popover.connect("map", self._on_model_selector_opened)
 
         box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=0)
         box.set_margin_top(6)
@@ -1980,6 +1989,8 @@ class PorAiWindow(Adw.ApplicationWindow):
         self._model_list = list(model_ids)
         self._select_model(current if current in model_ids else model_ids[0])
         self._toast(f"{len(model_ids)} modelos disponíveis.")
+        # Primeira vez com o catálogo carregado: apresenta o menu e o seletor.
+        GLib.timeout_add(600, self._maybe_show_tour)
         return False
 
     def _check_update_silently(self) -> bool:
@@ -2036,8 +2047,16 @@ class PorAiWindow(Adw.ApplicationWindow):
     # Guia de primeira execução                                            #
     # ------------------------------------------------------------------ #
 
-    # Chave na config que registra que o balão já foi exibido uma vez.
+    # Três balões, sempre um de cada vez:
+    #
+    #   1. depois de configurar a chave   → no menu: "carregar os modelos"
+    #   2. depois de atualizar os modelos → no menu: Preferências e Temas
+    #   3. logo depois do 2               → no seletor: "escolha o modelo"
+    #
+    # O 1 e a dupla 2+3 aparecem uma única vez por computador; as chaves
+    # abaixo registram isso na config.
     _MODELS_HINT_KEY = "models_hint_shown"
+    _TOUR_HINT_KEY = "tour_hints_shown"
 
     def _maybe_show_models_hint(self) -> bool:
         """Mostra o balão do menu se a chave acabou de ser configurada e o
@@ -2046,7 +2065,7 @@ class PorAiWindow(Adw.ApplicationWindow):
         Chamado via GLib.timeout_add, então retorna False para não repetir.
         """
         if (
-            self._models_hint is None
+            self._hint is None
             and self.config.is_configured()
             and not self.config.get(self._MODELS_HINT_KEY, False)
             and self._menu_button.get_mapped()
@@ -2057,7 +2076,83 @@ class PorAiWindow(Adw.ApplicationWindow):
         return False
 
     def _show_models_hint(self) -> None:
-        """Balão ancorado no botão de menu, explicando o próximo passo."""
+        """Balão 1: ancorado no botão de menu, explicando o próximo passo."""
+        self._show_hint(
+            self._menu_button,
+            "Próximo passo: carregar os modelos",
+            "Abra este menu e escolha “Atualizar modelos do OpenRouter” "
+            "para baixar a lista completa de modelos disponíveis.",
+            [
+                ("Entendi", self._dismiss_hint, False),
+                ("Atualizar agora", self._on_models_hint_refresh, True),
+            ],
+        )
+
+    def _on_models_hint_refresh(self, _button) -> None:
+        """Atalho do balão: faz o mesmo que o item do menu."""
+        self._dismiss_hint()
+        self._on_refresh_models()
+
+    def _maybe_show_tour(self) -> bool:
+        """Depois de atualizar os modelos, apresenta o menu (balão 2) e, em
+        seguida, o seletor de modelo (balão 3) — uma única vez.
+
+        Chamado via GLib.timeout_add, então retorna False para não repetir.
+        """
+        if (
+            not self.config.get(self._TOUR_HINT_KEY, False)
+            and self._menu_button.get_mapped()
+        ):
+            self.config.set(self._TOUR_HINT_KEY, True)
+            self.config.save()
+            self._show_menu_hint()
+        return False
+
+    def _show_menu_hint(self) -> None:
+        """Balão 2: no mesmo botão de menu, apontando Preferências e Temas."""
+        self._model_hint_pending = True
+        self._show_hint(
+            self._menu_button,
+            "Deixe o POR.ai do seu jeito",
+            "Neste menu, em “Preferências”, você configura o comportamento "
+            "da IA. Em “Temas”, altera as cores da interface.",
+            [("Próximo", self._show_model_hint, True)],
+        )
+
+    def _show_model_hint(self, *_args) -> bool:
+        """Balão 3: no seletor de modelo. Só aparece na sequência do balão 2.
+
+        Também é chamado via GLib.timeout_add (ver _on_menu_popover_closed),
+        por isso retorna False.
+        """
+        if self._model_hint_pending:
+            self._model_hint_pending = False
+            self._show_hint(
+                self._model_button,
+                "Escolha o modelo",
+                "Clique aqui para escolher o modelo desejado.",
+                [("Entendi", self._dismiss_hint, False)],
+            )
+        return False
+
+    def _on_menu_popover_closed(self, *_args) -> None:
+        # O menu foi aberto com o balão 2 na tela (o que o fecha): em vez de
+        # perder o balão 3, ele aparece assim que o menu for fechado.
+        if self._model_hint_pending:
+            GLib.timeout_add(300, self._show_model_hint)
+
+    def _on_model_selector_opened(self, *_args) -> None:
+        self._model_hint_pending = False
+        self._dismiss_hint()
+
+    def _show_hint(self, anchor: Gtk.Widget, title: str, body: str, actions) -> None:
+        """Abre um balão guia ancorado em ``anchor``, fechando o anterior.
+
+        ``actions`` é uma lista de ``(rótulo, callback, destacado)``; o
+        callback recebe o botão clicado, como em qualquer sinal "clicked".
+        """
+        self._dismiss_hint()
+
         popover = Gtk.Popover()
         popover.set_position(Gtk.PositionType.BOTTOM)
         popover.set_autohide(False)
@@ -2068,49 +2163,33 @@ class PorAiWindow(Adw.ApplicationWindow):
         box.set_margin_start(6)
         box.set_margin_end(6)
 
-        title = Gtk.Label(label="Próximo passo: carregar os modelos")
-        title.add_css_class("heading")
-        title.set_xalign(0.0)
-        box.append(title)
+        title_label = Gtk.Label(label=title)
+        title_label.add_css_class("heading")
+        title_label.set_xalign(0.0)
+        box.append(title_label)
 
-        body = Gtk.Label(
-            label=(
-                "Abra este menu e escolha “Atualizar modelos do OpenRouter” "
-                "para baixar a lista completa de modelos disponíveis."
-            )
-        )
-        body.set_wrap(True)
-        body.set_max_width_chars(36)
-        body.set_xalign(0.0)
-        box.append(body)
+        body_label = Gtk.Label(label=body)
+        body_label.set_wrap(True)
+        body_label.set_max_width_chars(36)
+        body_label.set_xalign(0.0)
+        box.append(body_label)
 
         buttons = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=6)
         buttons.set_halign(Gtk.Align.END)
-
-        later = Gtk.Button(label="Entendi")
-        later.add_css_class("flat")
-        later.connect("clicked", self._dismiss_models_hint)
-        buttons.append(later)
-
-        refresh = Gtk.Button(label="Atualizar agora")
-        refresh.add_css_class("suggested-action")
-        refresh.connect("clicked", self._on_models_hint_refresh)
-        buttons.append(refresh)
-
+        for label, callback, suggested in actions:
+            button = Gtk.Button(label=label)
+            button.add_css_class("suggested-action" if suggested else "flat")
+            button.connect("clicked", callback)
+            buttons.append(button)
         box.append(buttons)
-        popover.set_child(box)
 
-        popover.set_parent(self._menu_button)
-        self._models_hint = popover
+        popover.set_child(box)
+        popover.set_parent(anchor)
+        self._hint = popover
         popover.popup()
 
-    def _on_models_hint_refresh(self, _button) -> None:
-        """Atalho do balão: faz o mesmo que o item do menu."""
-        self._dismiss_models_hint()
-        self._on_refresh_models()
-
-    def _dismiss_models_hint(self, *_args) -> None:
-        popover, self._models_hint = self._models_hint, None
+    def _dismiss_hint(self, *_args) -> None:
+        popover, self._hint = self._hint, None
         if popover is None:
             return
         popover.popdown()
