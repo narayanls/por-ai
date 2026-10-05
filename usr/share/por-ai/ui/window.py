@@ -2080,17 +2080,16 @@ class PorAiWindow(Adw.ApplicationWindow):
         self._show_hint(
             self._menu_button,
             "Próximo passo: carregar os modelos",
-            "Abra este menu e escolha “Atualizar modelos do OpenRouter” "
-            "para baixar a lista completa de modelos disponíveis.",
+            "Clique em Atualizar Agora. Neste menu, futuramente, você pode atualizar sempre que quiser.",
             [
-                ("Entendi", self._dismiss_hint, False),
+               
                 ("Atualizar agora", self._on_models_hint_refresh, True),
             ],
         )
 
     def _on_models_hint_refresh(self, _button) -> None:
         """Atalho do balão: faz o mesmo que o item do menu."""
-        self._dismiss_hint()
+        
         self._on_refresh_models()
 
     def _maybe_show_tour(self) -> bool:
@@ -2114,8 +2113,8 @@ class PorAiWindow(Adw.ApplicationWindow):
         self._show_hint(
             self._menu_button,
             "Deixe o POR.ai do seu jeito",
-            "Neste menu, em “Preferências”, você configura o comportamento "
-            "da IA. Em “Temas”, altera as cores da interface.",
+            "Neste menu, em Preferências, você configura o comportamento "
+            "da IA. Em Temas, altera as cores da interface.",
             [("Próximo", self._show_model_hint, True)],
         )
 
@@ -2131,7 +2130,7 @@ class PorAiWindow(Adw.ApplicationWindow):
                 self._model_button,
                 "Escolha o modelo",
                 "Clique aqui para escolher o modelo desejado.",
-                [("Entendi", self._dismiss_hint, False)],
+                [("Entendi", self._dismiss_hint, True)],
             )
         return False
 

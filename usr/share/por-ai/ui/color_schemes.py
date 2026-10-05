@@ -124,16 +124,6 @@ THEMES: Dict[str, Dict] = {
         "accent_fg": "#faf4ed",
         "border": "#dfdad9",
     },
-    "one-light": {
-        "label": "One Light",
-        "bg": "#effe",
-        "bg_dim": "#a9cee8",
-        "surface": "#ffffff",
-        "fg": "#383a42",
-        "accent": "#0b67a4",
-        "accent_fg": "#fafafa",
-        "border": "#e5e5e6",
-    },
     "eldritch": {
         "label": "Eldritch",
         "bg": "#020310",
