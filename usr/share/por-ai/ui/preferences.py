@@ -2,7 +2,9 @@
 Preferências do POR.ai.
 
 Usa ``Adw.PreferencesWindow`` (estável em todas as versões 1.x da libadwaita).
-As alterações são gravadas na configuração assim que o usuário fecha a janela.
+As alterações são gravadas na configuração assim que o usuário fecha a janela
+— seja pelo botão "Confirmar" da página OpenRouter, por Enter no campo da
+chave ou pelo botão de fechar da própria janela.
 """
 
 from __future__ import annotations
@@ -13,7 +15,7 @@ import gi
 
 gi.require_version("Gtk", "4.0")
 gi.require_version("Adw", "1")
-from gi.repository import Adw, Gtk
+from gi.repository import Adw, GLib, Gtk
 
 from core.config import Config
 
@@ -67,6 +69,12 @@ class PreferencesWindow(Adw.PreferencesWindow):
         # Grava ao fechar.
         self.connect("close-request", self._on_close)
 
+        # Sem chave ainda (primeira execução): já deixa o cursor no campo, para
+        # colar direto. Feito depois que a janela aparece, senão o foco inicial
+        # da própria janela sobrescreve este.
+        if not self.config.api_key:
+            self.connect("map", lambda *_: GLib.idle_add(self._focus_api_key))
+
     # ------------------------------------------------------------------ #
     # Página: OpenRouter                                                   #
     # ------------------------------------------------------------------ #
@@ -99,6 +107,23 @@ class PreferencesWindow(Adw.PreferencesWindow):
         #self._site_url_row.set_text(self.config.site_url)
         #group.add(self._site_url_row)
 
+        # Botão explícito para concluir. Sem ele, quem acabou de colar a chave
+        # precisa adivinhar que as preferências só são gravadas ao fechar a
+        # janela. Fica habilitado apenas quando há uma chave digitada; Enter no
+        # campo da chave faz o mesmo.
+        self._confirm_button = Gtk.Button(label="Confirmar")
+        self._confirm_button.add_css_class("suggested-action")
+        self._confirm_button.add_css_class("pill")
+        self._confirm_button.set_halign(Gtk.Align.CENTER)
+        self._confirm_button.set_margin_top(18)
+        self._confirm_button.set_tooltip_text("Salvar e fechar as preferências")
+        self._confirm_button.connect("clicked", self._on_confirm)
+        group.add(self._confirm_button)
+
+        self._api_key_row.connect("changed", self._sync_confirm_button)
+        self._api_key_row.connect("entry-activated", self._on_confirm)
+        self._sync_confirm_button()
+
         page.add(group)
 
         models_group = Adw.PreferencesGroup()
@@ -127,6 +152,20 @@ class PreferencesWindow(Adw.PreferencesWindow):
         page.add(models_group)
 
         self.add(page)
+
+    def _focus_api_key(self) -> bool:
+        self._api_key_row.grab_focus()
+        return False  # chamado via GLib.idle_add: não reagendar
+
+    def _sync_confirm_button(self, *_args) -> None:
+        has_key = bool(self._api_key_row.get_text().strip())
+        self._confirm_button.set_sensitive(has_key)
+
+    def _on_confirm(self, *_args) -> None:
+        """Salva e fecha. A gravação em si acontece em _on_close, disparado
+        pelo close-request — o mesmo caminho do botão de fechar da janela."""
+        if self._api_key_row.get_text().strip():
+            self.close()
 
     # ------------------------------------------------------------------ #
     # Página: Comportamento                                                #
