@@ -2,12 +2,16 @@
 Verificação e download de atualizações do POR.ai.
 
 Fluxo:
-  1. Lê a versão instalada de /usr/share/por-ai/version.txt
+  1. Lê a versão instalada do version.txt que fica ao lado de core/ e ui/
+     (/usr/share/por-ai no pacote nativo, /app/share/por-ai no Flatpak)
   2. Consulta a API do GitHub para obter a última release
   3. Compara as versões (semver simples)
   4. Se houver atualização, detecta o sistema e baixa o pacote correto
-  5. Instala o pacote com o gerenciador nativo (pacman -U / apt install),
-     elevando privilégio via pkexec (ou terminal + sudo como fallback)
+  5. Instala o pacote:
+       - Arch/Debian: gerenciador nativo (pacman -U / apt install), elevando
+         privilégio via pkexec (ou terminal + sudo como fallback)
+       - Flatpak: `flatpak install --bundle` rodando no HOST, via
+         flatpak-spawn (exige --talk-name=org.freedesktop.Flatpak no manifesto)
 """
 
 from __future__ import annotations
@@ -24,8 +28,13 @@ from typing import Any, Callable, Dict, Optional, Tuple
 
 logger = logging.getLogger(__name__)
 
-# Arquivo gravado pelo PKGBUILD/build-deb.sh com a versão da tag.
-VERSION_FILE = "/usr/share/por-ai/version.txt"
+# Arquivo gravado pelo PKGBUILD / build-deb.sh / manifesto do Flatpak com a
+# versão do pacote. Fica na raiz do app, ao lado de core/ e ui/ — por isso o
+# caminho é relativo a este arquivo: dá /usr/share/por-ai/version.txt no pacote
+# nativo e /app/share/por-ai/version.txt dentro do Flatpak.
+VERSION_FILE = os.path.join(
+    os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "version.txt"
+)
 
 # API do GitHub — sem autenticação, limite de 60 req/hora por IP (suficiente).
 GITHUB_API = "https://api.github.com/repos/narayanls/por-ai/releases/latest"
@@ -40,8 +49,22 @@ PKG_NAME = "por-ai"
 
 # ── Detecção de sistema ───────────────────────────────────────────────────────
 
+# Gravado pelo Flatpak na raiz de toda sandbox; a seção [Instance] traz o
+# caminho real da instalação (app-path).
+FLATPAK_INFO = "/.flatpak-info"
+
+
+def running_in_flatpak() -> bool:
+    """True se este processo está rodando dentro da sandbox do Flatpak."""
+    return os.path.exists(FLATPAK_INFO) or bool(os.environ.get("FLATPAK_ID"))
+
+
 def _detect_system() -> str:
-    """Retorna 'arch', 'deb' ou 'unknown'."""
+    """Retorna 'flatpak', 'arch', 'deb' ou 'unknown'."""
+    # Flatpak vem primeiro: dentro da sandbox não existe pacman nem dpkg, e o
+    # pacote certo a baixar é o bundle .flatpak, qualquer que seja a distro.
+    if running_in_flatpak():
+        return "flatpak"
     # Arch/CachyOS/Manjaro: pacman disponível
     try:
         subprocess.run(["pacman", "--version"], capture_output=True, timeout=3)
@@ -58,6 +81,8 @@ def _detect_system() -> str:
 
 
 def _asset_suffix(system: str) -> str:
+    if system == "flatpak":
+        return ".flatpak"
     return ".pkg.tar.zst" if system == "arch" else ".deb"
 
 
@@ -68,6 +93,8 @@ def _version_from_asset_name(name: str) -> Optional[str]:
 
       por-ai-0.1.7.3-1-any.pkg.tar.zst  ->  0.1.7.3-1
       por-ai_0.1.7.3_all.deb            ->  0.1.7.3
+      por-ai-0.1.7.3.flatpak            ->  0.1.7.3
+      io.github.narayanls.PorAi.flatpak ->  None (quem chama usa a tag)
 
     Comparar contra isto (em vez da tag do git) evita o descasamento entre
     o esquema da tag e o esquema do pacote.
@@ -82,6 +109,14 @@ def _version_from_asset_name(name: str) -> Optional[str]:
     elif name.endswith(".deb"):
         # <pkgname>_<version>_<arch>.deb
         m = re.match(rf"^{re.escape(PKG_NAME)}_(.+?)_[^_]+\.deb$", name)
+        if m:
+            return m.group(1)
+    elif name.endswith(".flatpak"):
+        # Aceita qualquer nome que contenha a versão (com ou sem "v" e com
+        # revisão opcional): por-ai-0.1.7.3.flatpak, por-ai-v0.1.7.3-2.flatpak…
+        # O ID do app não atrapalha: "io.github.narayanls.PorAi" não tem
+        # números separados por ponto.
+        m = re.search(r"(?<![\d.])v?(\d+(?:\.\d+)+(?:-\d+)?)(?!\.?\d)", name)
         if m:
             return m.group(1)
     return None
@@ -243,6 +278,85 @@ def _find_terminal() -> Optional[Tuple[str, str]]:
     return None
 
 
+# ── Instalação do bundle no Flatpak ───────────────────────────────────────────
+
+def _download_dir(system: str) -> str:
+    """Pasta onde o pacote é baixado.
+
+    No Flatpak o /tmp é privado da sandbox: o `flatpak` do host não enxergaria
+    o arquivo. Já a pasta de cache do app (~/.var/app/<id>/cache) existe com o
+    MESMO caminho dentro e fora da sandbox, então é para lá que o bundle vai.
+    """
+    if system != "flatpak":
+        return tempfile.gettempdir()
+    base = os.environ.get("XDG_CACHE_HOME") or os.path.expanduser("~/.cache")
+    path = os.path.join(base, PKG_NAME, "updates")
+    os.makedirs(path, exist_ok=True)
+    return path
+
+
+def _flatpak_scope() -> str:
+    """'--user' ou '--system', conforme onde ESTA instalação está.
+
+    Atualizar na instalação errada criaria uma segunda cópia do app em vez de
+    substituir a que está rodando.
+    """
+    app_path = ""
+    try:
+        with open(FLATPAK_INFO, "r", encoding="utf-8") as handle:
+            for line in handle:
+                if line.startswith("app-path="):
+                    app_path = line.split("=", 1)[1].strip()
+                    break
+    except OSError:
+        pass
+    return "--system" if app_path.startswith("/var/lib/flatpak/") else "--user"
+
+
+def _install_flatpak_bundle(
+    path: str,
+    on_status: Optional[Callable[[str], None]] = None,
+) -> Tuple[bool, str]:
+    """Instala o bundle .flatpak por cima da versão atual.
+
+    O binário `flatpak` não existe dentro da sandbox: o comando roda no host
+    via flatpak-spawn. `flatpak install --bundle` sobre um app já instalado
+    funciona como atualização (mesma origem, novo commit).
+    """
+    if not shutil.which("flatpak-spawn"):
+        return False, "flatpak-spawn não encontrado dentro da sandbox."
+
+    scope = _flatpak_scope()
+    argv = [
+        "flatpak-spawn", "--host",
+        "flatpak", "install", scope, "--noninteractive", "-y", "--bundle", path,
+    ]
+    if on_status:
+        on_status(
+            "Instalando… confirme a senha de administrador se o sistema pedir."
+            if scope == "--system" else "Instalando a nova versão…"
+        )
+    print(f"[POR.ai] Instalando via flatpak: {' '.join(argv)}", flush=True)
+    try:
+        proc = subprocess.run(argv, capture_output=True, text=True)
+    except Exception as exc:  # pylint: disable=broad-except
+        return False, f"Falha ao iniciar o flatpak: {exc}"
+
+    if proc.returncode == 0:
+        return True, ""
+
+    output = (proc.stderr or proc.stdout or "").strip()
+    if "org.freedesktop.Flatpak" in output:
+        # flatpak-spawn não conseguiu falar com o host.
+        return False, (
+            "Este Flatpak não tem permissão para instalar atualizações "
+            "(falta --talk-name=org.freedesktop.Flatpak). Baixe o arquivo "
+            ".flatpak na página de releases e instale manualmente."
+        )
+    detail = output.splitlines()[-1] if output else ""
+    return False, detail or f"flatpak retornou código {proc.returncode}."
+
+
 def install_package(
     path: str,
     system: str,
@@ -252,10 +366,14 @@ def install_package(
     Instala o pacote baixado usando o gerenciador nativo, com elevação de
     privilégio. Retorna (sucesso, mensagem_de_erro).
 
-    Estratégia (igual ao Tac Writer):
+    No Flatpak, instala o bundle pelo `flatpak` do host (ver
+    _install_flatpak_bundle). Nos pacotes nativos, a estratégia é:
       1. pkexec  → prompt gráfico de senha, código de saída real (preferido)
       2. terminal + sudo → fallback quando não há agente polkit/pkexec
     """
+    if system == "flatpak":
+        return _install_flatpak_bundle(path, on_status=on_status)
+
     argv = _install_argv(system, path)
     if argv is None:
         return False, "Sistema não suportado para instalação automática."
@@ -387,6 +505,18 @@ class UpdateChecker:
             release = fetch_latest_release()
             remote_tag = release.get("tag_name", "")
 
+            # No Flatpak só existe atualização quando a release traz o bundle
+            # .flatpak. Sem isso (ex.: release publicada só com os pacotes
+            # Arch/Debian) o diálogo ofereceria um update impossível de instalar.
+            if self._system == "flatpak" and not self.find_asset_url(release):
+                logger.info(
+                    "Release %s ainda não tem bundle .flatpak; nada a fazer.",
+                    remote_tag,
+                )
+                if on_no_update:
+                    on_no_update()
+                return
+
             # Versão REAL do pacote (do nome do asset), que é o que o
             # version.txt guarda. Cai para a tag só se não houver asset.
             remote_version = self.remote_version(release) or remote_tag
@@ -441,7 +571,8 @@ class UpdateChecker:
         on_error: Optional[Callable[[str], None]] = None,
     ) -> None:
         """
-        Baixa o pacote em /tmp e o instala com o gerenciador nativo.
+        Baixa o pacote (em /tmp, ou no cache do app quando em Flatpak) e o
+        instala com o gerenciador nativo / `flatpak install --bundle`.
         Todos os callbacks são chamados na thread de trabalho — use
         GLib.idle_add na camada de UI.
         """
@@ -455,7 +586,7 @@ class UpdateChecker:
             return
 
         filename = url.split("/")[-1]
-        dest = os.path.join(tempfile.gettempdir(), filename)
+        dest = os.path.join(_download_dir(self._system), filename)
 
         def worker() -> None:
             try:
@@ -471,5 +602,13 @@ class UpdateChecker:
             except Exception as exc:  # pylint: disable=broad-except
                 if on_error:
                     on_error(str(exc))
+            finally:
+                # O bundle fica no cache do app (não em /tmp, que o sistema
+                # limpa sozinho): apaga para não acumular a cada atualização.
+                if self._system == "flatpak":
+                    try:
+                        os.remove(dest)
+                    except OSError:
+                        pass
 
         threading.Thread(target=worker, daemon=True).start()

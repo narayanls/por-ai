@@ -1,0 +1,79 @@
+<?xml version='1.0' encoding='UTF-8'?>
+<component type="desktop-application">
+  <id>io.github.narayanls.PorAi</id>
+  <name>POR.ai</name>
+  <summary>Chat privado com modelos do OpenRouter</summary>
+  <metadata_license>CC0-1.0</metadata_license>
+  <project_license>GPL-3.0-or-later</project_license>
+  <developer id="io.github.narayanls">
+    <name>Narayan Lima da Silva</name>
+  </developer>
+  <description>
+    <p>
+      Converse com modelos de IA pelo OpenRouter em uma interface nativa GTK4 e
+      Adwaita. O POR.ai (Personal Own Router AI) roda no seu computador, sem
+      telemetria e sem servidor intermediário próprio: as conversas e a chave
+      da API ficam guardadas localmente.
+    </p>
+    <p>Recursos:</p>
+    <ul>
+      <li>Histórico persistente: renomeie, continue ou exclua conversas</li>
+      <li>Busca no catálogo completo de modelos do OpenRouter</li>
+      <li>Respostas em streaming, com botão para interromper</li>
+      <li>Markdown renderizado e links clicáveis</li>
+      <li>Até 4 anexos por mensagem: PDF, ODT, ODS, XLSX, texto e imagens</li>
+      <li>Geração de planilhas ODS e XLSX com gráficos</li>
+      <li>Temas de cores como Dracula, Nord e Everforest</li>
+      <li>Corretor ortográfico em português do Brasil</li>
+    </ul>
+    <p>
+      Você precisa de uma chave de API do OpenRouter. O conteúdo das mensagens e
+      dos arquivos anexados é enviado ao OpenRouter, que o encaminha ao
+      provedor do modelo escolhido. A maior parte dos modelos é paga.
+    </p>
+  </description>
+  <launchable type="desktop-id">io.github.narayanls.PorAi.desktop</launchable>
+  <url type="homepage">https://github.com/narayanls/por-ai</url>
+  <url type="bugtracker">https://github.com/narayanls/por-ai/issues</url>
+  <url type="vcs-browser">https://github.com/narayanls/por-ai</url>
+  <!--
+    Captura de tela (opcional fora do Flathub). Troque pela URL de uma imagem
+    PNG da janela principal e descomente:
+
+  <screenshots>
+    <screenshot type="default">
+      <caption>Janela principal do POR.ai</caption>
+      <image>https://raw.githubusercontent.com/narayanls/por-ai/main/data/screenshots/principal.png</image>
+    </screenshot>
+  </screenshots>
+  -->
+  <categories>
+    <category>Utility</category>
+    <category>Network</category>
+    <category>Chat</category>
+  </categories>
+  <keywords>
+    <keyword>ia</keyword>
+    <keyword>ai</keyword>
+    <keyword>chat</keyword>
+    <keyword>openrouter</keyword>
+    <keyword>llm</keyword>
+    <keyword>assistente</keyword>
+  </keywords>
+  <provides>
+    <binary>por-ai</binary>
+  </provides>
+  <requires>
+    <internet>always</internet>
+  </requires>
+  <supports>
+    <control>keyboard</control>
+    <control>pointing</control>
+  </supports>
+  <content_rating type="oars-1.1" />
+  <!-- Acrescente uma <release> no topo a cada versão nova. -->
+  <releases>
+    <release version="0.1.9.4" date="2026-10-05" />
+    <release version="0.1.9.3" date="2026-09-28" />
+  </releases>
+</component>
