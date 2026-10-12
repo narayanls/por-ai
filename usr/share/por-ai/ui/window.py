@@ -64,7 +64,7 @@ except Exception as _exc:  # pylint: disable=broad-except
     _UPDATE_AVAILABLE = False
 
 
-APP_VERSION = "0.1.9.4"
+APP_VERSION = "0.1.9.5"
 
 _CSS = b"""
 .message-bubble {
