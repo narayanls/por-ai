@@ -43,6 +43,7 @@ Após inserir sua chave de API, atualize os modelos antes de começar uma conver
 - **Anexos** — até 4 arquivos por mensagem: PDF, ODT, TXT, MD, ODS, XLSX, JSON, PY e imagens (PNG, JPG, WebP)
 - **Multimodal** — envie imagens (PNG, JPG, WebP) como entrada para modelos
   compatíveis analisarem (GPT-4o, Claude, Gemini…)
+- **Pesquisa na web com fontes** — o botão 🌐 ao lado de "Enviar" liga a pesquisa na web do OpenRouter (`openrouter:web_search`) só para a próxima mensagem; as páginas consultadas aparecem numeradas, com link, no fim da resposta. O botão desliga sozinho após cada envio, porque a pesquisa tem custo extra. Funciona com modelos que aceitam ferramentas (tools), ex. Deepseek, Claude, Gemini, Qwen, Zai.
 - **Links clicáveis** — URLs nas respostas são renderizadas como links (imagens e planilhas). As imagens ficam salvas em /home/user/.local/share/por-ai/images e as planilhas em /home/user/.local/share/por-ai/spredsheets
 - **Interface nativa** — GTK4 + Adwaita, integrada ao tema do sistema (modo escuro/claro automático). É possível personalizar escolhendo entre diversos temas como Dracula, Nord, Everforest.
 Exemplo de temas:
