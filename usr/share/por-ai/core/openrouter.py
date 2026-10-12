@@ -21,6 +21,26 @@ logger = logging.getLogger(__name__)
 OPENROUTER_BASE = "https://openrouter.ai/api/v1"
 
 
+def web_search_tool(max_results: int = 5) -> Dict[str, Any]:
+    """Entrada do array ``tools`` que liga a pesquisa na web do OpenRouter.
+
+    É uma *server tool*: o próprio OpenRouter executa a busca e devolve os
+    resultados ao modelo, então o app não precisa tratar ``tool_calls``.
+    O modelo decide se e quantas vezes pesquisar; as páginas usadas voltam
+    como anotações ``url_citation`` (ver ``_collect_citations``).
+
+    Substitui o antigo ``plugins: [{"id": "web"}]`` / sufixo ``:online``,
+    marcados como obsoletos na documentação do OpenRouter.
+
+    ``engine`` fica no padrão ("auto"): busca nativa do provedor quando o
+    modelo tem (OpenAI, Anthropic, Google, xAI, Perplexity), senão Exa.
+    """
+    return {
+        "type": "openrouter:web_search",
+        "parameters": {"max_results": max_results},
+    }
+
+
 class OpenRouterError(RuntimeError):
     """Erro de comunicação ou de resposta do OpenRouter.
 
@@ -48,6 +68,10 @@ class OpenRouterClient:
         self.site_url = (site_url or "").strip()
         self.site_name = (site_name or "").strip()
         self.timeout = timeout
+        # Fontes (páginas da web) citadas na última resposta, quando a
+        # pesquisa na web estava ligada. Lista de {"url", "title"} sem
+        # repetições, na ordem em que apareceram. Zerada a cada chamada.
+        self.last_citations: List[Dict[str, str]] = []
 
     # ------------------------------------------------------------------ #
     # Cabeçalhos                                                           #
@@ -125,6 +149,7 @@ class OpenRouterClient:
             "usage": {"include": True},
         }
         payload.update(self._clean_params(params))
+        self.last_citations = []
 
         started = time.monotonic()
         try:
@@ -160,6 +185,8 @@ class OpenRouterClient:
         image_urls = self._extract_images(
             message.get("images") if isinstance(message, dict) else None
         )
+        if isinstance(message, dict):
+            self._collect_citations(message.get("annotations"), self.last_citations)
         finish_reason = choices[0].get("finish_reason") if isinstance(choices[0], dict) else None
         usage = data.get("usage") if isinstance(data.get("usage"), dict) else None
         self._debug_log(
@@ -226,6 +253,7 @@ class OpenRouterClient:
             "usage": {"include": True},
         }
         payload.update(self._clean_params(params))
+        self.last_citations = []
 
         collected: List[str] = []
         collected_reasoning: List[str] = []
@@ -295,6 +323,7 @@ class OpenRouterClient:
                         usage = chunk_usage
                     if provider is None and isinstance(chunk.get("provider"), str):
                         provider = chunk["provider"]
+                    self._collect_chunk_citations(chunk, self.last_citations)
                     delta_text, delta_reasoning, delta_images = self._extract_delta(chunk)
                     if delta_reasoning and "first_reasoning" not in timing:
                         timing["first_reasoning"] = time.monotonic() - started
@@ -371,7 +400,59 @@ class OpenRouterClient:
                 urls.append(url)
         return urls
 
-    
+    @staticmethod
+    def _collect_citations(
+        annotations: Any, sink: List[Dict[str, str]]
+    ) -> None:
+        """Acrescenta a ``sink`` as fontes de uma lista de anotações.
+
+        O formato padronizado pelo OpenRouter (o mesmo do Chat Completions
+        da OpenAI) é::
+
+            {"type": "url_citation",
+             "url_citation": {"url": ..., "title": ..., "content": ...}}
+
+        Alguns provedores mandam os campos direto no objeto, sem o nível
+        ``url_citation`` — aceitamos os dois. URLs repetidas (a mesma página
+        citada em vários trechos da resposta) entram uma vez só.
+        """
+        if not isinstance(annotations, list):
+            return
+        seen = {item["url"] for item in sink}
+        for annotation in annotations:
+            if not isinstance(annotation, dict):
+                continue
+            if annotation.get("type") not in (None, "url_citation"):
+                continue
+            inner = annotation.get("url_citation")
+            data = inner if isinstance(inner, dict) else annotation
+            url = data.get("url")
+            if not isinstance(url, str) or not url.startswith(("http://", "https://")):
+                continue
+            url = url.strip()
+            if url in seen:
+                continue
+            seen.add(url)
+            title = data.get("title")
+            title = title.strip() if isinstance(title, str) else ""
+            sink.append({"url": url, "title": title})
+
+    @staticmethod
+    def _collect_chunk_citations(
+        chunk: Dict[str, Any], sink: List[Dict[str, str]]
+    ) -> None:
+        """No streaming, as anotações costumam chegar em ``delta.annotations``
+        (geralmente nos últimos pedaços). Por segurança olhamos também
+        ``message.annotations`` dentro do chunk, que alguns provedores usam
+        no pedaço final."""
+        choices = chunk.get("choices") or []
+        if not choices or not isinstance(choices[0], dict):
+            return
+        for key in ("delta", "message"):
+            part = choices[0].get(key)
+            if isinstance(part, dict):
+                OpenRouterClient._collect_citations(part.get("annotations"), sink)
+
     @staticmethod
     def _extract_delta(chunk: Dict[str, Any]) -> Tuple[str, str, List[str]]:
         """Retorna (texto_conteudo, texto_raciocinio, urls_de_imagem) de um

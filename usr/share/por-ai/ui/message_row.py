@@ -20,7 +20,8 @@ gi.require_version("Pango", "1.0")
 from gi.repository import Adw, Gdk, Gio, GLib, Gtk, Pango
 
 from ui.markup import escape_plain, md_to_pango
-from typing import List, Optional
+from typing import Dict, List, Optional
+from urllib.parse import urlparse
 
 
 class MessageRow(Gtk.Box):
@@ -102,6 +103,30 @@ class MessageRow(Gtk.Box):
 
         bubble.append(self._label)
 
+        # Fontes da pesquisa na web (ver set_sources). Fica num label à
+        # parte, separado da resposta por uma linha, para não se misturar
+        # ao texto do modelo nem à busca dentro da conversa.
+        self._sources: List[Dict[str, str]] = []
+        if self._is_assistant:
+            self._sources_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=4)
+            self._sources_box.set_visible(False)
+            self._sources_box.append(Gtk.Separator(orientation=Gtk.Orientation.HORIZONTAL))
+            self._sources_label = Gtk.Label()
+            self._sources_label.set_wrap(True)
+            self._sources_label.set_wrap_mode(Pango.WrapMode.WORD_CHAR)
+            self._sources_label.set_xalign(0.0)
+            self._sources_label.set_halign(Gtk.Align.START)
+            self._sources_label.set_max_width_chars(80)
+            self._sources_label.set_selectable(True)
+            self._sources_label.set_focus_on_click(False)
+            self._sources_label.add_css_class("caption")
+            self._sources_label.connect("activate-link", self._on_link_activated)
+            self._sources_box.append(self._sources_label)
+            bubble.append(self._sources_box)
+        else:
+            self._sources_box = None
+            self._sources_label = None
+
         if self._is_assistant:
             self._meta_label = Gtk.Label()
             self._meta_label.add_css_class("caption")
@@ -138,6 +163,45 @@ class MessageRow(Gtk.Box):
 
     def get_text(self) -> str:
         return self._text
+
+    def set_sources(self, sources: List[Dict[str, str]]) -> None:
+        """Mostra, abaixo da resposta, a lista numerada de páginas que a
+        pesquisa na web consultou — cada uma com link clicável."""
+        if self._sources_box is None or self._sources_label is None:
+            return
+        self._sources = [
+            s for s in sources
+            if isinstance(s, dict) and isinstance(s.get("url"), str)
+        ]
+        if not self._sources:
+            self._sources_box.set_visible(False)
+            return
+        lines = ["<b>🌐 Fontes</b>"]
+        for index, source in enumerate(self._sources, start=1):
+            url = source["url"]
+            title = (source.get("title") or "").strip() or self._host(url)
+            lines.append(
+                f'{index}. <a href="{GLib.markup_escape_text(url)}">'
+                f"{GLib.markup_escape_text(title)}</a>"
+                f' <span alpha="60%">— {GLib.markup_escape_text(self._host(url))}</span>'
+            )
+        self._sources_label.set_markup("\n".join(lines))
+        self._sources_box.set_visible(True)
+
+    @staticmethod
+    def _host(url: str) -> str:
+        """Domínio da URL sem "www." (ex.: "g1.globo.com")."""
+        host = urlparse(url).netloc
+        return host[4:] if host.startswith("www.") else host or url
+
+    def _sources_as_markdown(self) -> str:
+        if not self._sources:
+            return ""
+        lines = ["**Fontes:**"]
+        for index, source in enumerate(self._sources, start=1):
+            title = (source.get("title") or "").strip() or self._host(source["url"])
+            lines.append(f"{index}. [{title}]({source['url']})")
+        return "\n".join(lines)
 
     # ------------------------------------------------------------------ #
     # Busca na conversa                                                    #
@@ -287,8 +351,11 @@ class MessageRow(Gtk.Box):
     def _on_copy(self, _button: Gtk.Button) -> None:
         display = Gdk.Display.get_default()
         if display is not None:
-            # Copia o texto puro (Markdown), não o markup.
-            display.get_clipboard().set(self._text)
+            # Copia o texto puro (Markdown), não o markup — com as fontes
+            # da pesquisa no fim, quando houver.
+            sources = self._sources_as_markdown()
+            text = f"{self._text}\n\n{sources}" if sources else self._text
+            display.get_clipboard().set(text)
         if self._copy_button is not None:
             self._copy_button.set_icon_name("object-select-symbolic")
             self._copy_button.set_tooltip_text("Copiado!")
@@ -301,8 +368,14 @@ class MessageRow(Gtk.Box):
 
             GLib.timeout_add_seconds(2, restore)
 
-    def set_usage(self, total_tokens: Optional[int] = None, cost: Optional[float] = None) -> None:
-        """Mostra tokens/custo em letra pequena no rodapé da bolha."""
+    def set_usage(
+        self,
+        total_tokens: Optional[int] = None,
+        cost: Optional[float] = None,
+        web_searches: Optional[int] = None,
+    ) -> None:
+        """Mostra tokens/custo (e quantas pesquisas na web foram feitas,
+        quando houve) em letra pequena no rodapé da bolha."""
         if not self._is_assistant or self._meta_label is None:
             return
         parts: List[str] = []
@@ -310,6 +383,9 @@ class MessageRow(Gtk.Box):
             parts.append(f"{total_tokens} tokens")
         if cost is not None:
             parts.append(self._format_cost(cost))
+        if web_searches:
+            plural = "pesquisa" if web_searches == 1 else "pesquisas"
+            parts.append(f"🌐 {web_searches} {plural} na web")
         if not parts:
             return
         self._meta_label.set_text(" · ".join(parts))
