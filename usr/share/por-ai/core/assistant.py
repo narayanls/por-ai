@@ -30,7 +30,7 @@ from typing import Any, Callable, Dict, List, Optional, Tuple
 from gi.repository import GLib
 
 from core.config import Config
-from core.openrouter import OpenRouterClient, OpenRouterError
+from core.openrouter import OpenRouterClient, OpenRouterError, web_search_tool
 
 # ── Dependências opcionais ────────────────────────────────────────────────────
 
@@ -394,7 +394,9 @@ class ChatAssistant:
         # on_done(display, raw): `display` é o texto com os blocos de planilha
         # já trocados por links; `raw` é o texto original do modelo, com os
         # blocos intactos. São iguais quando não houve planilha na resposta.
-        on_done: Callable[[str, str], None],
+        # O 3º argumento é a lista de fontes da pesquisa na web
+        # ([{"url", "title"}, ...]; vazia quando não houve pesquisa).
+        on_done: Callable[[str, str, List[Dict[str, str]]], None],
         on_error: Callable[[str], None],
         on_usage: Optional[Callable[[Dict[str, Any]], None]] = None,
         # on_reasoning(texto): chamado com os pedaços do raciocínio interno do
@@ -407,6 +409,11 @@ class ChatAssistant:
         # nova tentativa automática. Útil pra UI mostrar algo como
         # "Reconectando (tentativa 2/3)...".
         on_retry: Optional[Callable[[int, int, float], None]] = None,
+        # web_search: liga a pesquisa na web (server tool do OpenRouter)
+        # SÓ para este envio. Vem do botão ao lado do "Enviar", que volta a
+        # ficar desligado depois de cada mensagem — de propósito, para a
+        # busca (que tem custo extra) nunca ficar ligada por esquecimento.
+        web_search: bool = False,
     ) -> bool:
         with self._lock:
             if self._inflight:
@@ -417,9 +424,51 @@ class ChatAssistant:
         threading.Thread(
             target=self._worker,
             args=(model, messages, on_delta, on_done, on_error, on_usage, on_reasoning, on_retry),
+            kwargs={"web_search": web_search},
             daemon=True,
         ).start()
         return True
+
+    # Resultados por pesquisa. Cada resultado aumenta o texto que o modelo
+    # lê (tokens de entrada) e, no Exa, acima de 10 por pesquisa há custo
+    # extra — 5 é o padrão do próprio OpenRouter.
+    _WEB_SEARCH_MAX_RESULTS = 5
+
+    _WEB_SEARCH_HINT = (
+        "[O usuário ativou a pesquisa na web para esta mensagem. Use a "
+        "ferramenta de pesquisa para basear a resposta em informações "
+        "atuais. Não monte uma lista de fontes no fim da resposta: o "
+        "aplicativo já mostra as páginas consultadas abaixo dela.]"
+    )
+
+    @staticmethod
+    def _model_supports_tools(entry: Optional[Dict[str, Any]]) -> Optional[bool]:
+        """True/False conforme o catálogo do OpenRouter diz que o modelo
+        aceita ``tools``; None quando o catálogo não está disponível (aí
+        deixamos o pedido seguir e o próprio OpenRouter decide)."""
+        if not isinstance(entry, dict):
+            return None
+        supported = entry.get("supported_parameters")
+        if not isinstance(supported, list):
+            return None
+        return "tools" in supported
+
+    @staticmethod
+    def _append_to_system(messages: List[Any], text: str) -> List[Any]:
+        """Devolve uma cópia de ``messages`` com ``text`` acrescentado à
+        mensagem de sistema (mesma estratégia de ``_inject_capabilities``)."""
+        result = list(messages)
+        for index, message in enumerate(result):
+            if isinstance(message, dict) and message.get("role") == "system":
+                content = message.get("content", "")
+                if isinstance(content, str):
+                    merged = dict(message)
+                    merged["content"] = f"{content}\n\n{text}" if content else text
+                    result[index] = merged
+                    return result
+                break
+        result.insert(0, {"role": "system", "content": text})
+        return result
 
     def _worker(
         self,
@@ -429,16 +478,38 @@ class ChatAssistant:
         # on_done(display, raw): `display` é o texto com os blocos de planilha
         # já trocados por links; `raw` é o texto original do modelo, com os
         # blocos intactos. São iguais quando não houve planilha na resposta.
-        on_done: Callable[[str, str], None],
+        # O 3º argumento é a lista de fontes da pesquisa na web
+        # ([{"url", "title"}, ...]; vazia quando não houve pesquisa).
+        on_done: Callable[[str, str, List[Dict[str, str]]], None],
         on_error: Callable[[str], None],
         on_usage: Optional[Callable[[Dict[str, Any]], None]] = None,
         on_reasoning: Optional[Callable[[str], None]] = None,
         on_retry: Optional[Callable[[int, int, float], None]] = None,
+        web_search: bool = False,
     ) -> None:
         try:
             client = self._build_client()
             messages = self._inject_capabilities(messages)
             extra: Dict[str, Any] = {}
+
+            if web_search:
+                if self._is_image_model(model):
+                    # Modelos de imagem não usam ferramentas; a busca seria
+                    # ignorada ou recusada pelo provedor.
+                    raise OpenRouterError(
+                        "A pesquisa na web não funciona com modelos de geração "
+                        "de imagem. Desative o botão de pesquisa e envie de novo."
+                    )
+                supports = self._model_supports_tools(self._get_model_entry(client, model))
+                if supports is False:
+                    raise OpenRouterError(
+                        f"O modelo {model} não aceita ferramentas (tools), então "
+                        "não consegue usar a pesquisa na web. Escolha outro "
+                        "modelo ou desative o botão de pesquisa."
+                    )
+                extra["tools"] = [web_search_tool(self._WEB_SEARCH_MAX_RESULTS)]
+                messages = self._append_to_system(messages, self._WEB_SEARCH_HINT)
+
             if self._is_image_model(model):
                 extra["modalities"] = ["image", "text"]
                 # Não força max_tokens pra modelos de imagem: o valor
@@ -569,7 +640,13 @@ class ChatAssistant:
             if usage and on_usage is not None:
                 GLib.idle_add(on_usage, usage)
 
-            GLib.idle_add(on_done, display, full)
+            # Páginas citadas pela pesquisa na web (vazio sem pesquisa).
+            # Vão separadas do texto: a janela as guarda num campo próprio
+            # da mensagem e as mostra num bloco "Fontes" abaixo da resposta,
+            # sem misturar com o que é reenviado ao modelo no histórico.
+            sources = list(client.last_citations) if web_search else []
+
+            GLib.idle_add(on_done, display, full, sources)
         except OpenRouterError as exc:
             GLib.idle_add(on_error, str(exc))
         except Exception as exc:  # pylint: disable=broad-except

@@ -519,6 +519,18 @@ class PorAiWindow(Adw.ApplicationWindow):
         input_scroller.add_css_class("card")
         row.append(input_scroller)
 
+        # Pesquisa na web — vale só para a PRÓXIMA mensagem. Fica aqui, e
+        # não em Preferências, de propósito: a busca tem custo extra, e uma
+        # opção "esquecida ligada" gastaria créditos em toda conversa. O
+        # botão volta a desligar sozinho depois de cada envio.
+        self._web_search_button = Gtk.ToggleButton()
+        self._web_search_button.set_icon_name("web-browser-symbolic")
+        self._web_search_button.add_css_class("flat")
+        self._web_search_button.set_valign(Gtk.Align.END)
+        self._web_search_button.connect("toggled", self._on_web_search_toggled)
+        self._update_web_search_button()
+        row.append(self._web_search_button)
+
         self._send_button = Gtk.Button()
         self._send_button.set_icon_name("send-to-symbolic")
         self._send_button.set_tooltip_text("Enviar (Enter)")
@@ -529,6 +541,28 @@ class PorAiWindow(Adw.ApplicationWindow):
 
         outer.append(row)
         return outer
+
+    def _on_web_search_toggled(self, _button: Gtk.ToggleButton) -> None:
+        self._update_web_search_button()
+
+    def _update_web_search_button(self) -> None:
+        """Destaca o botão (cor de destaque) enquanto a pesquisa estiver
+        ligada, para não passar despercebido antes de enviar."""
+        button = self._web_search_button
+        if button.get_active():
+            button.remove_css_class("flat")
+            button.add_css_class("suggested-action")
+            button.set_tooltip_text(
+                "Pesquisa na web LIGADA para a próxima mensagem "
+                "(tem custo extra no OpenRouter). Clique para desligar."
+            )
+        else:
+            button.remove_css_class("suggested-action")
+            button.add_css_class("flat")
+            button.set_tooltip_text(
+                "Pesquisar na web nesta mensagem e mostrar as fontes "
+                "(custo extra; desliga sozinho após o envio)"
+            )
 
     def _apply_source_style_scheme(self, scheme_id: Optional[str] = None) -> None:
         """Escolhe um style scheme do GtkSource que combine com o tema.
@@ -913,6 +947,10 @@ class PorAiWindow(Adw.ApplicationWindow):
 
         self._clear_placeholder()
 
+        # Pesquisa na web: vale só para este envio (o botão é desligado
+        # logo abaixo, assim que o pedido sai).
+        web_search = self._web_search_button.get_active()
+
         # Monta o conteúdo enviado à API (texto + arquivos, se houver).
         api_content: Any = text
         display_text = text
@@ -977,7 +1015,9 @@ class PorAiWindow(Adw.ApplicationWindow):
         # Sinal visível de que o pedido saiu — modelos lentos podem levar
         # vários segundos até o primeiro token, e a bolha vazia parecia
         # travamento. É substituído pelo primeiro pedaço que chegar.
-        self._streaming_row.set_text("_Aguardando o modelo…_")
+        self._streaming_row.set_text(
+            "_🌐 Pesquisando na web…_" if web_search else "_Aguardando o modelo…_"
+        )
 
         self._clear_input()
         self._set_busy(True)
@@ -1019,8 +1059,13 @@ class PorAiWindow(Adw.ApplicationWindow):
             on_usage=self._on_usage,
             on_reasoning=self._on_reasoning,
             on_retry=self._on_retry,
+            web_search=web_search,
         )
-        if not started:
+        if started:
+            # Desliga só depois que o pedido saiu: se o envio falhar antes
+            # (ex.: anexo ilegível), a pessoa não perde a escolha.
+            self._web_search_button.set_active(False)
+        else:
             self._set_busy(False)
             self._toast("Já existe uma resposta em andamento.")
 
@@ -1139,9 +1184,23 @@ class PorAiWindow(Adw.ApplicationWindow):
         self._pending_usage = usage
         if self._streaming_row is not None:
             self._streaming_row.set_usage(
-                usage.get("total_tokens"), usage.get("cost")
+                usage.get("total_tokens"),
+                usage.get("cost"),
+                self._web_search_count(usage),
             )
         return False
+
+    @staticmethod
+    def _web_search_count(usage: Optional[Dict[str, Any]]) -> Optional[int]:
+        """Quantas pesquisas na web o modelo fez nesta resposta, segundo o
+        ``usage.server_tool_use.web_search_requests`` do OpenRouter."""
+        if not isinstance(usage, dict):
+            return None
+        server = usage.get("server_tool_use")
+        if not isinstance(server, dict):
+            return None
+        count = server.get("web_search_requests")
+        return count if isinstance(count, int) and count > 0 else None
 
     def _history_for_api(self) -> List[Dict[str, str]]:
         """Histórico enviado ao modelo, com as planilhas antigas degradadas.
@@ -1178,7 +1237,12 @@ class PorAiWindow(Adw.ApplicationWindow):
             history.append({"role": message["role"], "content": content})
         return history
 
-    def _on_done(self, full_text: str, raw_text: str = "") -> bool:
+    def _on_done(
+        self,
+        full_text: str,
+        raw_text: str = "",
+        sources: Optional[List[Dict[str, str]]] = None,
+    ) -> bool:
         self._cancel_stream_render()
         if self._streaming_row is not None:
             if not full_text.strip():
@@ -1190,9 +1254,18 @@ class PorAiWindow(Adw.ApplicationWindow):
                 "content": raw_text or full_text,
                 "display": full_text,
             }
+            if sources:
+                # Campo próprio (não vai no texto): o histórico reenviado ao
+                # modelo usa só content/display, então as fontes não pesam
+                # nos tokens dos próximos turnos.
+                assistant_message["sources"] = sources
+                self._streaming_row.set_sources(sources)
             if self._pending_usage:
                 assistant_message["tokens"] = self._pending_usage.get("total_tokens")
                 assistant_message["cost"] = self._pending_usage.get("cost")
+                searches = self._web_search_count(self._pending_usage)
+                if searches:
+                    assistant_message["web_searches"] = searches
             self._messages.append(assistant_message)
             self._persist()
         self._streaming_row = None
@@ -1878,6 +1951,11 @@ class PorAiWindow(Adw.ApplicationWindow):
                 "display": m.get("display", m.get("content", "")),
                 "tokens": m.get("tokens"),
                 "cost": m.get("cost"),
+                **{
+                    key: m[key]
+                    for key in ("sources", "web_searches")
+                    if m.get(key)
+                },
             }
             for m in data.get("messages", [])
             if isinstance(m, dict)
@@ -1901,7 +1979,13 @@ class PorAiWindow(Adw.ApplicationWindow):
             for message in self._messages:
                 row = MessageRow(message["role"], message["display"])
                 if message["role"] == "assistant":
-                    row.set_usage(message.get("tokens"), message.get("cost"))
+                    row.set_usage(
+                        message.get("tokens"),
+                        message.get("cost"),
+                        message.get("web_searches"),
+                    )
+                    if message.get("sources"):
+                        row.set_sources(message["sources"])
                 self._messages_box.append(row)
 
         self._set_busy(False)
