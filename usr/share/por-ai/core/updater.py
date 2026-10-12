@@ -135,31 +135,57 @@ def read_local_version() -> Optional[str]:
 
 # ── Comparação de versões ─────────────────────────────────────────────────────
 
-def _version_tuple(version: str) -> tuple:
+def _split_version(version: str) -> Tuple[tuple, Optional[int]]:
     """
-    Converte 'v0.1.7.1-2' em (0, 1, 7, 1, 2) para comparação.
+    Separa a versão em (números_da_versão, revisão_do_pacote):
 
-    O sufixo de revisão ('-1', '-2'…) NÃO é descartado — ele entra como mais
-    um número de versão, igual ao Tac Writer. Assim 'v0.1.7.1-1' e
-    'v0.1.7.1-2' deixam de ser considerados iguais.
+      'v0.1.9.4-1' -> ((0, 1, 9, 4), 1)
+      '0.1.9.4'    -> ((0, 1, 9, 4), None)
+      '1:0.1.7-2'  -> ((0, 1, 7), 2)      (epoch descartado)
+
+    A revisão é o '-N' final: o pkgrel do Arch ou a revisão do bundle
+    Flatpak. Ela fica SEPARADA porque nem todo lado a tem — o .deb, o
+    Flatpak e o APP_VERSION embutido (usado quando o app roda do
+    código-fonte, sem version.txt) trazem só a versão.
     """
     clean = version.strip().lstrip("v")
-    # Remove o epoch (ex.: '1:0.1.7') se existir, para não quebrar o .isdigit().
+    # Remove o epoch (ex.: '1:0.1.7') se existir.
     if ":" in clean:
         clean = clean.split(":", 1)[-1]
-    parts = re.split(r"[.\-]", clean)
-    nums = [int(p) for p in parts if p.isdigit()]
-    return tuple(nums) if nums else (0,)
+    revision: Optional[int] = None
+    match = re.match(r"^(.*?)-(\d+)$", clean)
+    if match:
+        clean, revision = match.group(1), int(match.group(2))
+    nums = [int(p) for p in re.split(r"[.\-]", clean) if p.isdigit()]
+    return (tuple(nums) if nums else (0,)), revision
+
+
+def _version_tuple(version: str) -> tuple:
+    """Só os números da versão, sem a revisão do pacote ('v0.1.7.1-2' ->
+    (0, 1, 7, 1)). Mantida para quem já usava esta função."""
+    return _split_version(version)[0]
 
 
 def is_newer(remote: str, local: str) -> bool:
-    """True se a versão remota for maior que a local."""
-    rt, lt = _version_tuple(remote), _version_tuple(local)
+    """True se a versão remota for maior que a local.
+
+    Compara primeiro a versão; a revisão do pacote ('-1', '-2'…) só desempata
+    quando OS DOIS lados a têm. Antes, 'v0.1.9.4-1' (asset do Arch) contra
+    '0.1.9.4' (APP_VERSION, sem revisão) virava (0,1,9,4,1) > (0,1,9,4,0) e
+    o app oferecia atualização para a mesma versão que já estava rodando.
+    Com revisão nos dois lados, 'v0.1.7.1-2' continua sendo mais nova que
+    'v0.1.7.1-1' (republicação do pacote Arch com o mesmo pkgver).
+    """
+    (rt, rrev), (lt, lrev) = _split_version(remote), _split_version(local)
     # Iguala o comprimento para uma comparação posicional consistente.
     length = max(len(rt), len(lt))
     rt += (0,) * (length - len(rt))
     lt += (0,) * (length - len(lt))
-    return rt > lt
+    if rt != lt:
+        return rt > lt
+    if rrev is not None and lrev is not None:
+        return rrev > lrev
+    return False
 
 
 # ── Consulta à API do GitHub ──────────────────────────────────────────────────
