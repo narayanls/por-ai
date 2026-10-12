@@ -6,7 +6,7 @@
 set -eu
 
 PKGNAME="por-ai"
-VERSION="0.1.8.0"
+VERSION="0.1.9.5"
 
 # ── 1. Limpa caches de bytecode e garante permissões ────────────────────────
 find usr -type d -name '__pycache__' -exec rm -rf {} + 2>/dev/null || true
@@ -53,6 +53,8 @@ fpm -s dir -t deb \
     --depends "libspelling-1-1 | libspelling-1-2" \
     --depends "gir1.2-spelling-1" \
     --depends "python3-odf" \
+    --depends "python3-openpyxl" \
+    --depends "python3-matplotlib" \
     --depends "hunspell" \
     --depends "hunspell-pt-br" \
     usr/
