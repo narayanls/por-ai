@@ -19,6 +19,7 @@ import time
 import unicodedata
 from typing import Any, Dict, List, Optional
 import gi
+import re
 
 gi.require_version("Gtk", "4.0")
 gi.require_version("Adw", "1")
@@ -1293,8 +1294,60 @@ class PorAiWindow(Adw.ApplicationWindow):
             content = message.get("content", "")
             if message["role"] == "assistant" and index != last_raw:
                 content = message.get("display") or content
+            elif (
+                message["role"] == "user"
+                and user_messages_after[index] >= self._ATTACHMENT_KEEP_TURNS
+            ):
+                content = self._compact_attachments(content)
             history.append({"role": message["role"], "content": content})
         return history
+
+    # Anexos antigos
+    # O texto de um PDF/planilha anexado e as imagens (em base64) ficam no
+    # `content` da mensagem do usuário
+    _ATTACHMENT_KEEP_TURNS = 4
+    _RE_ATTACHED_FILE = re.compile(
+        r"--- INÍCIO DO ARQUIVO: (?P<name>[^\n]*?) ---\n.*?\n--- FIM DO ARQUIVO ---",
+        re.DOTALL,
+    )
+
+    @staticmethod
+    def _omitted_file_note(name: str) -> str:
+        return (
+            f"[Arquivo «{name}» anexado antes nesta conversa; conteúdo omitido "
+            "aqui para economizar tokens. Se precisar dele, peça ao usuário "
+            "para anexá-lo de novo.]"
+        )
+
+    @classmethod
+    def _compact_attachments(cls, content: Any) -> Any:
+        """Devolve ``content`` com o texto dos arquivos anexados e as imagens
+        trocados por avisos curtos. Não altera o objeto recebido."""
+        if isinstance(content, str):
+            return cls._RE_ATTACHED_FILE.sub(
+                lambda m: cls._omitted_file_note(m.group("name")), content
+            )
+        if not isinstance(content, list):
+            return content
+
+        texts: List[str] = []
+        images = 0
+        for part in content:
+            if not isinstance(part, dict):
+                continue
+            if part.get("type") == "text":
+                texts.append(cls._compact_attachments(part.get("text") or ""))
+            elif part.get("type") == "image_url":
+                images += 1
+        if images:
+            plural = "imagem enviada" if images == 1 else "imagens enviadas"
+            texts.append(
+                f"[{images} {plural} antes nesta conversa; omitida(s) aqui "
+                "para economizar tokens. Se precisar vê-la(s) de novo, peça ao "
+                "usuário para reenviar.]"
+            )
+        # Sem imagens, o conteúdo volta a ser texto simples.
+        return "\n\n".join(t for t in texts if t)
 
     def _on_done(
         self,
