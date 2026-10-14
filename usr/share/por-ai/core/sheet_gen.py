@@ -129,9 +129,15 @@ def capabilities_prompt() -> str:
         '{"sheet_name": "...", "columns": ["Col1", "Col2", ...], '
         '"rows": [[v1, v2, ...], ...], "style": {"header_bg": "RRGGBB", ...}}',
         "'style' é opcional (cores em hex sem #: header_bg, header_fg, "
-        "row_bg, alt_row_bg, row_fg, border). Números devem ir como number "
-        "JSON, não como string, para a planilha reconhecer a coluna como "
-        "numérica.",
+        "row_bg, alt_row_bg, row_fg, border). Escolha as cores conforme o "
+        "pedido; se o usuário citar um tema conhecido (everforest, gruvbox, "
+        "nord, dracula...), use as cores reais dessa paleta, sempre com "
+        "contraste legível entre texto e fundo.",
+        "Números vão como number JSON (sem aspas nem separador de milhar), "
+        "para a planilha reconhecer a coluna como numérica.",
+        "O bloco é trocado por um link de download antes de a resposta "
+        "chegar ao usuário: não descreva o bloco nem explique como o "
+        "arquivo é gerado.",
     ]
     if "xlsx" not in formats:
         lines.append("Não gere blocos ```xlsx nesta instalação: apenas ```ods está disponível.")
