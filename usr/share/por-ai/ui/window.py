@@ -566,27 +566,26 @@ class PorAiWindow(Adw.ApplicationWindow):
 
     def _apply_source_style_scheme(self, scheme_id: Optional[str] = None) -> None:
         """Escolhe um style scheme do GtkSource que combine com o tema.
-
-        Sem isso o fundo do input fica branco mesmo no modo escuro. Se há um
-        esquema de cores do POR.ai ativo (não "sistema"), gera e usa um
-        scheme casado com a paleta escolhida — senão cai para os esquemas
-        padrão do GtkSource, escolhidos pelo modo claro/escuro do sistema.
-
-        `scheme_id`, se informado, tem prioridade sobre o valor salvo na
-        config — importante ao trocar de tema, quando esta função pode ser
-        chamada antes do `config.set()`/`config.save()` terem rodado.
         """
         if not _HAS_SOURCEVIEW:
             return
 
         if scheme_id is None:
             scheme_id = self.config.get("color_scheme", color_schemes.SYSTEM_SCHEME_ID)
+        # Tema interno do POR-ai: XML casado com a paleta    
         if scheme_id and scheme_id != color_schemes.SYSTEM_SCHEME_ID:
             custom_scheme = self._install_custom_source_scheme(scheme_id)
             if custom_scheme is not None:
                 self._input_view.get_buffer().set_style_scheme(custom_scheme)
                 return
 
+        # "system": deriva do tema GTK atual (Noctalia, Adwaita, etc.).
+        system_scheme = self._install_system_source_scheme()
+        if system_scheme is not None:
+            self._input_view.get_buffer().set_style_scheme(system_scheme)
+            return
+
+        # Último recurso: schemes padrão do GtkSource.
         try:
             manager = GtkSource.StyleSchemeManager.get_default()
             is_dark = Adw.StyleManager.get_default().get_dark()
@@ -605,6 +604,69 @@ class PorAiWindow(Adw.ApplicationWindow):
                 self._input_view.get_buffer().set_style_scheme(scheme)
         except Exception as exc:  # noqa: BLE001
             logger.debug("Esquema de estilo indisponível: %r", exc)
+
+    def _install_system_source_scheme(self):
+        """Gera um GtkSource.StyleScheme a partir das cores resolvidas do tema
+        GTK atual. Faz o campo de entrada seguir o tema do sistema (Noctalia,
+        Adwaita, qualquer tema que redefina as cores nomeadas do libadwaita)."""
+        if not _HAS_SOURCEVIEW:
+            return None
+        try:
+            ctx = self._input_view.get_style_context()
+            ok_bg, bg_rgba = ctx.lookup_color("card_bg_color")
+            ok_fg, fg_rgba = ctx.lookup_color("view_fg_color")
+            ok_accent, accent_rgba = ctx.lookup_color("accent_bg_color")
+            ok_accent_fg, accent_fg_rgba = ctx.lookup_color("accent_fg_color")
+            if not (ok_bg and ok_fg):
+                return None
+
+            def to_hex(rgba):
+                return "#{:02x}{:02x}{:02x}".format(
+                    round(rgba.red * 255),
+                    round(rgba.green * 255),
+                    round(rgba.blue * 255),
+                )
+
+            bg = to_hex(bg_rgba)
+            fg = to_hex(fg_rgba)
+            accent = to_hex(accent_rgba) if ok_accent else fg
+            accent_fg = to_hex(accent_fg_rgba) if ok_accent_fg else bg
+
+            xml = f"""<?xml version="1.0" encoding="UTF-8"?>
+<style-scheme id="porai-system" name="POR.ai — Sistema" version="1.0">
+  <author>POR.ai</author>
+  <_description>Gerado a partir das cores do tema GTK atual.</_description>
+  <style name="text" foreground="{fg}" background="{bg}"/>
+  <style name="selection" foreground="{accent_fg}" background="{accent}"/>
+  <style name="selection-unfocused" foreground="{accent_fg}" background="{accent}"/>
+  <style name="cursor" foreground="{fg}"/>
+  <style name="secondary-cursor" foreground="{fg}"/>
+  <style name="current-line" background="{bg}"/>
+  <style name="current-line-number" foreground="{fg}" background="{bg}"/>
+  <style name="line-numbers" foreground="{fg}" background="{bg}"/>
+  <style name="draw-spaces" foreground="{fg}"/>
+  <style name="background-pattern" background="{bg}"/>
+  <style name="right-margin" foreground="{fg}" background="{bg}"/>
+</style-scheme>
+"""
+            schemes_dir = os.path.join(
+                GLib.get_user_cache_dir(), "por-ai", "gtksourceview-schemes"
+            )
+            os.makedirs(schemes_dir, exist_ok=True)
+            path = os.path.join(schemes_dir, "porai-system.xml")
+            with open(path, "w", encoding="utf-8") as handle:
+                handle.write(xml)
+
+            manager = GtkSource.StyleSchemeManager.get_default()
+            if schemes_dir not in manager.get_search_path():
+                manager.append_search_path(schemes_dir)
+            # Reescaneia sempre: o arquivo pode ter acabado de ser reescrito com
+            # cores novas (troca de tema claro/escuro ou de tema do sistema).
+            manager.force_rescan()
+            return manager.get_scheme("porai-system")
+        except Exception as exc:  # noqa: BLE001
+            logger.debug("Falha ao gerar scheme do sistema: %r", exc)
+            return None
 
     def _install_custom_source_scheme(self, scheme_id: str):
         """Grava (se preciso) e retorna o GtkSource.StyleScheme do esquema
