@@ -454,21 +454,36 @@ class ChatAssistant:
         return "tools" in supported
 
     @staticmethod
-    def _append_to_system(messages: List[Any], text: str) -> List[Any]:
-        """Devolve uma cópia de ``messages`` com ``text`` acrescentado à
-        mensagem de sistema (mesma estratégia de ``_inject_capabilities``)."""
+    def _append_to_last_user(messages: List[Any], text: str) -> List[Any]:
+        """Devolve uma cópia de ``messages`` com ``text`` acrescentado ao FIM
+        da última mensagem do usuário.
+        """
         result = list(messages)
-        for index, message in enumerate(result):
-            if isinstance(message, dict) and message.get("role") == "system":
-                content = message.get("content", "")
-                if isinstance(content, str):
-                    merged = dict(message)
-                    merged["content"] = f"{content}\n\n{text}" if content else text
-                    result[index] = merged
-                    return result
+        for index in range(len(result) - 1, -1, -1):
+            message = result[index]
+            if not (isinstance(message, dict) and message.get("role") == "user"):
+                continue
+            content = message.get("content", "")
+            merged = dict(message)
+            if isinstance(content, str):
+                merged["content"] = f"{content}\n\n{text}" if content else text
+            elif isinstance(content, list):
+                # Mensagem multimodal (texto + imagens): acrescenta um bloco
+                # de texto novo, sem tocar nos blocos existentes.
+                merged["content"] = list(content) + [{"type": "text", "text": text}]
+            else:
                 break
-        result.insert(0, {"role": "system", "content": text})
+            result[index] = merged
+            return result
+        result.append({"role": "user", "content": text})
         return result
+
+    # Cache de prompt
+    _CACHE_CONTROL = {"type": "ephemeral"}
+
+    @staticmethod
+    def _wants_cache_control(model: str) -> bool:
+        return model.lower().startswith("anthropic/")
 
     def _worker(
         self,
@@ -508,7 +523,9 @@ class ChatAssistant:
                         "modelo ou desative o botão de pesquisa."
                     )
                 extra["tools"] = [web_search_tool(self._WEB_SEARCH_MAX_RESULTS)]
-                messages = self._append_to_system(messages, self._WEB_SEARCH_HINT)
+                messages = self._append_to_last_user(messages, self._WEB_SEARCH_HINT)
+            if self._wants_cache_control(model):
+                extra["cache_control"] = dict(self._CACHE_CONTROL)
 
             if self._is_image_model(model):
                 extra["modalities"] = ["image", "text"]

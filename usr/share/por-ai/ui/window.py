@@ -1086,28 +1086,12 @@ class PorAiWindow(Adw.ApplicationWindow):
         self._scroll_to_bottom(force=True)
 
 
-        # Instrução invisível: informa ao modelo que blocos de planilha viram
-        # arquivos locais baixáveis. Vai só no envio, nunca no que o usuário
-        # vê ou edita em Preferências. Como `sys_prompt` é reconstruído a cada
-        # envio a partir da config, não há risco de acumular.
+        
+        # As instruções de planilha/gráfico NÃO vão aqui: o ChatAssistant
+        # acrescenta capabilities_prompt() (core/sheet_gen.py) à mensagem de
+        # sistema em cada envio, já ajustado aos formatos instalados.
         sys_prompt = self.config.system_prompt or ""
-        sys_prompt += (
-            "\n\n[Ao gerar planilhas, responda com um bloco ```ods contendo "
-            "apenas JSON com as chaves sheet_name, columns (lista de títulos), "
-            "rows (lista de listas) e opcionalmente style (header_bg, "
-            "header_fg, row_bg, alt_row_bg, row_fg, border, em hexadecimal). "
-            "Use ```xlsx no lugar de ```ods somente se o usuário pedir "
-            "explicitamente Excel ou .xlsx. O sistema do usuário converte o "
-            "bloco em uma planilha formatada e baixável. Escolha as cores "
-            "livremente conforme o pedido — se o usuário citar um tema "
-            "conhecido (everforest, gruvbox, nord, dracula, solarized...), "
-            "use os valores hexadecimais reais daquela paleta — garantindo "
-            "contraste legível entre fonte e fundo. Valores numéricos devem "
-            "ir como número puro, sem aspas nem separador de milhar. "
-            "Não descreva o bloco nem explique como o arquivo será gerado: "
-            "o bloco é substituído por um link de download antes de a "
-            "resposta chegar ao usuário.]"
-        )
+
 
         messages = [{"role": "system", "content": sys_prompt}]
         messages.extend(self._history_for_api())
@@ -1249,8 +1233,21 @@ class PorAiWindow(Adw.ApplicationWindow):
                 usage.get("total_tokens"),
                 usage.get("cost"),
                 self._web_search_count(usage),
+                self._cached_token_count(usage),
             )
         return False
+
+    @staticmethod
+    def _cached_token_count(usage: Optional[Dict[str, Any]]) -> Optional[int]:
+        """Tokens de entrada lidos do cache de prompt (cobrados com desconto),
+        segundo ``usage.prompt_tokens_details.cached_tokens``."""
+        if not isinstance(usage, dict):
+            return None
+        details = usage.get("prompt_tokens_details")
+        if not isinstance(details, dict):
+            return None
+        count = details.get("cached_tokens")
+        return count if isinstance(count, int) and count > 0 else None
 
     @staticmethod
     def _web_search_count(usage: Optional[Dict[str, Any]]) -> Optional[int]:
@@ -1328,6 +1325,9 @@ class PorAiWindow(Adw.ApplicationWindow):
                 searches = self._web_search_count(self._pending_usage)
                 if searches:
                     assistant_message["web_searches"] = searches
+                cached = self._cached_token_count(self._pending_usage)
+                if cached:
+                    assistant_message["cached_tokens"] = cached
             self._messages.append(assistant_message)
             self._persist()
         self._streaming_row = None
@@ -2015,7 +2015,7 @@ class PorAiWindow(Adw.ApplicationWindow):
                 "cost": m.get("cost"),
                 **{
                     key: m[key]
-                    for key in ("sources", "web_searches")
+                    for key in ("sources", "web_searches", "cached_tokens")
                     if m.get(key)
                 },
             }
@@ -2045,6 +2045,7 @@ class PorAiWindow(Adw.ApplicationWindow):
                         message.get("tokens"),
                         message.get("cost"),
                         message.get("web_searches"),
+                        message.get("cached_tokens"),
                     )
                     if message.get("sources"):
                         row.set_sources(message["sources"])

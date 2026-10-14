@@ -373,6 +373,7 @@ class MessageRow(Gtk.Box):
         total_tokens: Optional[int] = None,
         cost: Optional[float] = None,
         web_searches: Optional[int] = None,
+        cached_tokens: Optional[int] = None,
     ) -> None:
         """Mostra tokens/custo (e quantas pesquisas na web foram feitas,
         quando houve) em letra pequena no rodapé da bolha."""
@@ -381,6 +382,8 @@ class MessageRow(Gtk.Box):
         parts: List[str] = []
         if total_tokens is not None:
             parts.append(f"{total_tokens} tokens")
+        if cached_tokens:
+            parts.append(f"⚡ {cached_tokens} em cache")
         if cost is not None:
             parts.append(self._format_cost(cost))
         if web_searches:
