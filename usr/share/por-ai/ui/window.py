@@ -1289,6 +1289,15 @@ class PorAiWindow(Adw.ApplicationWindow):
             ):
                 last_raw = index
 
+        # Quantas mensagens do usuário vêm DEPOIS de cada posição: é a
+        # "idade" de um anexo (ver _compact_attachments).
+        user_messages_after: List[int] = [0] * len(self._messages)
+        seen = 0
+        for index in range(len(self._messages) - 1, -1, -1):
+            user_messages_after[index] = seen
+            if self._messages[index]["role"] == "user":
+                seen += 1
+
         history: List[Dict[str, str]] = []
         for index, message in enumerate(self._messages):
             content = message.get("content", "")
