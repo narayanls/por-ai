@@ -40,7 +40,7 @@ Após inserir sua chave de API, atualize os modelos antes de começar uma conver
 - **Busca de modelos** — acesso ao catálogo completo do OpenRouter com busca por substring (ex.: digitar `kimi` encontra `moonshotai/kimi`)
 - **Streaming em tempo real** — respostas aparecem sendo escritas, com botão para interromper
 - **Markdown renderizado** — negrito, itálico, código, títulos.
-- **Anexos** — até 4 arquivos por mensagem: PDF, ODT, TXT, MD, ODS, XLSX, JSON, PY e imagens (PNG, JPG, WebP)
+- **Anexos** — até 4 arquivos por mensagem: PDF, ODT, TXT, MD, ODS, XLSX, CSV, JSON, PY e imagens (PNG, JPG, WebP)
 - **Multimodal** — envie imagens (PNG, JPG, WebP) como entrada para modelos
   compatíveis analisarem (GPT-4o, Claude, Gemini…)
 - **Pesquisa na web com fontes** — o botão 🌐 ao lado de "Enviar" liga a pesquisa na web do OpenRouter (`openrouter:web_search`) só para a próxima mensagem; as páginas consultadas aparecem numeradas, com link, no fim da resposta. O botão desliga sozinho após cada envio, porque a pesquisa tem custo extra. Funciona com modelos que aceitam ferramentas (tools), ex. Deepseek, Claude, Gemini, Qwen, Zai.
