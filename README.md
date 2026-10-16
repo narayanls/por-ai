@@ -107,7 +107,7 @@ O conteúdo das mensagens e arquivos anexados é enviado ao **OpenRouter**, que 
 
 Você pode fazer isso acessando Personal -> Preferences -> Privacy.
 Clique em "+Add" para adicionar o nome do provedor.
-Para saber quais provedores adicionar basta clicar num modelo de IA que queira usar e aparecerá uma lista de todos os provedores. Os que tiverem o ícone de escudo em verde são retém as conversas e nem usam para treinamento das IAs, os que tiverem escudo em amarelo podem reter conversas mas não treinam com elas, e, por fim, os provedores com ícone em vermelho, retém e treinam com as conversas.
+Para saber quais provedores adicionar basta clicar num modelo de IA que queira usar e aparecerá uma lista de todos os provedores. Os que tiverem o ícone de escudo em verde não retém as conversas e nem usam para treinamento das IAs, os que tiverem escudo em amarelo podem reter conversas mas não treinam com elas, e, por fim, os provedores com ícone em vermelho, retém e treinam com as conversas.
 
 <img width="577" height="561" alt="satty-20261016-140424" src="https://github.com/user-attachments/assets/a5687d61-e8a7-4f8f-8d8d-246830c4fba3" />
 
