@@ -106,8 +106,14 @@ O POR.ai roda no seu computador, mas depende da conexão com a internet — sem 
 O conteúdo das mensagens e arquivos anexados é enviado ao **OpenRouter**, que os encaminha ao provedor do modelo escolhido. Nas configurações da sua conta OpenRouter você pode restringir provedores que treinam com dados dos usuários.
 
 Você pode fazer isso acessando Personal -> Preferences -> Privacy.
+Clique em "+Add" para adicionar o nome do provedor.
+Para saber quais provedores adicionar basta clicar num modelo de IA que queira usar e aparecerá uma lista de todos os provedores. Os que tiverem o ícone de escudo em verde são retém as conversas e nem usam para treinamento das IAs, os que tiverem escudo em amarelo podem reter conversas mas não treinam com elas, e, por fim, os provedores com ícone em vermelho, retém e treinam com as conversas.
 
-Abaixo um exemplo:
+<img width="577" height="561" alt="satty-20261016-140424" src="https://github.com/user-attachments/assets/a5687d61-e8a7-4f8f-8d8d-246830c4fba3" />
+
+
+Abaixo um exemplo de como fica a lista de provedores após adicioná-los:
+
 
 <img width="1054" height="233" alt="Imagem colada (17)" src="https://github.com/user-attachments/assets/8d65b101-5a5d-4040-92a9-4bcb67bb38bc" />
 
