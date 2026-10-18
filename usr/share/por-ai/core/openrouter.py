@@ -11,7 +11,7 @@ from __future__ import annotations
 import json
 import logging
 import time
-from typing import Any, Callable, Dict, List, Optional, Tuple
+from typing import Any, Callable, Dict, List, Optional, Set, Tuple
 
 
 import requests
@@ -99,7 +99,32 @@ class OpenRouterClient:
 
         ``timeout`` permite um limite menor que o do chat (o catálogo fica
         no caminho da primeira mensagem, então não pode esperar 240 s)."""
-        url = f"{OPENROUTER_BASE}/models/user"
+        return self._get_data_list("/models/user", timeout)
+
+    def list_zdr_model_ids(self, timeout: Optional[float] = None) -> Set[str]:
+        """IDs dos modelos com pelo menos um endpoint de retenção zero (ZDR).
+
+        O endpoint ``/endpoints/zdr`` lista um item por par modelo +
+        provedor; o campo ``model_id`` usa o mesmo formato dos IDs do
+        catálogo (ex.: ``deepseek/deepseek-v4.1-flash-1017``).
+
+        Necessário porque ``/models/user`` só aplica a política de
+        privacidade da CONTA (configurada no site); o filtro escolhido em
+        Preferências vai apenas no envio de cada mensagem.
+        """
+        ids: Set[str] = set()
+        for entry in self._get_data_list("/endpoints/zdr", timeout):
+            if isinstance(entry, dict):
+                model_id = entry.get("model_id")
+                if isinstance(model_id, str) and model_id.strip():
+                    ids.add(model_id.strip())
+        return ids
+
+    def _get_data_list(
+        self, path: str, timeout: Optional[float] = None
+    ) -> List[Dict[str, Any]]:
+        """GET em ``OPENROUTER_BASE + path`` e devolve o campo ``data``."""
+        url = f"{OPENROUTER_BASE}{path}"
         try:
             response = requests.get(
                 url, headers=self._headers(), timeout=timeout or self.timeout
@@ -126,7 +151,7 @@ class OpenRouterClient:
         except ValueError as exc:
             raise OpenRouterError("OpenRouter retornou JSON inválido.") from exc
 
-        data = payload.get("data")
+        data = payload.get("data") if isinstance(payload, dict) else None
         return data if isinstance(data, list) else []
 
     # ------------------------------------------------------------------ #

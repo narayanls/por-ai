@@ -61,6 +61,15 @@ DEFAULTS: Dict[str, Any] = {
     # OpenRouter (prioriza preço); "throughput" = mais tokens/s;
     # "latency" = primeira resposta mais rápida.
     "provider_sort": "",
+    # Filtro de privacidade dos provedores (provider routing do OpenRouter).
+    # "" = sem filtro; "no_training" = só provedores que não treinam com os
+    # prompts (podem reter temporariamente — escudo amarelo ou verde no
+    # site); "zdr" = só provedores com retenção zero (escudo verde).
+    "privacy_filter": "",
+    # Atualiza o catálogo de modelos sozinho, no máximo 1x a cada 24h.
+    "auto_update_models": False,
+    # Momento (time.time()) da última atualização bem-sucedida do catálogo.
+    "models_updated_at": 0,
 }
 
 # Valores aceitos em "reasoning_effort". "none" desliga o raciocínio (em
@@ -69,6 +78,10 @@ REASONING_EFFORT_CHOICES = ("auto", "none", "minimal", "low", "medium", "high")
 
 # Valores aceitos em "provider_sort" (ver provider routing do OpenRouter).
 PROVIDER_SORT_CHOICES = ("", "throughput", "latency", "price")
+# Valores aceitos em "privacy_filter".
+PRIVACY_FILTER_CHOICES = ("", "no_training", "zdr")
+# Intervalo mínimo entre atualizações automáticas do catálogo (segundos).
+AUTO_UPDATE_MODELS_INTERVAL = 24 * 60 * 60
 
     
 
@@ -227,6 +240,36 @@ class Config:
     def provider_sort(self, value: str) -> None:
         value = str(value or "").strip().lower()
         self.set("provider_sort", value if value in PROVIDER_SORT_CHOICES else "")
+
+
+    @property
+    def privacy_filter(self) -> str:
+        value = str(self.get("privacy_filter", "") or "").strip().lower()
+        return value if value in PRIVACY_FILTER_CHOICES else ""
+
+    @privacy_filter.setter
+    def privacy_filter(self, value: str) -> None:
+        value = str(value or "").strip().lower()
+        self.set("privacy_filter", value if value in PRIVACY_FILTER_CHOICES else "")
+
+    @property
+    def auto_update_models(self) -> bool:
+        return bool(self.get("auto_update_models", False))
+
+    @property
+    def models_updated_at(self) -> float:
+        try:
+            return float(self.get("models_updated_at", 0) or 0)
+        except (TypeError, ValueError):
+            return 0.0
+
+    def models_update_due(self, now: float) -> bool:
+        """True se a atualização automática está ligada e já se passaram 24h
+        desde a última atualização do catálogo."""
+        if not self.auto_update_models:
+            return False
+        last = self.models_updated_at
+        return last <= 0 or last > now or (now - last) >= AUTO_UPDATE_MODELS_INTERVAL
 
     def is_configured(self) -> bool:
         """True se há chave da API suficiente para usar o app."""
