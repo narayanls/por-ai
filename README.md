@@ -26,12 +26,23 @@ Fiz este aplicativo para uso pessoal com auxílio de IA. Porém, como acredito q
 
 
 ## Não se esqueça
-Você precisa criar uma chave de API no site do OpenRouter para usar este aplicativo. Acesse o site clicando [aqui.](https://openrouter.ai) Existem **modelos PAGOS** e gratuitos, a maior parte é pago. Adicione saldo no site do OpenRouter ou pesquise por modelos grátis.
+Você precisa criar uma chave de API no site do OpenRouter para usar este aplicativo. Acesse o site clicando [aqui.](https://openrouter.ai) Existem **modelos PAGOS** e gratuitos, a maior parte é pago. Adicione saldo no site do OpenRouter ou pesquise por "free" para achar modelos grátis.
 
-## Atualize os modelos do OpenRouter
-Após inserir sua chave de API, atualize os modelos antes de começar uma conversa. Assim você terá acesso a todos os modelos disponíveis naquele momento.
+## 🚀 Primeiro uso
 
-<img width="359" height="274" alt="Imagem colada (13)" src="https://github.com/user-attachments/assets/93066288-0907-4f50-9f27-50144420b40f" />
+1. Abra o **Menu ▸ Preferências** e **cole sua chave da API** do [OpenRouter](https://openrouter.ai/keys)
+2. Escolha quais provedores podem receber suas mensagens: **Todos**, **Sem treino** ou **Retenção zero** (dá para mudar depois em Preferências)
+3. Carregue os modelos: **Atualizar agora**, ou **Deixar automático** para o app manter a lista atualizada sozinho
+4. Clique no seletor de modelo no cabeçalho e escolha o modelo desejado
+5. **Enter** envia a mensagem — **Shift+Enter** quebra linha
+
+Os passos 2 e 3 aparecem como balões logo depois de você confirmar a chave.
+
+<div align="left">
+<img width="398" height="238" alt="satty-20261018-192109" src="https://github.com/user-attachments/assets/bf787f38-6ac9-44bb-b3a6-a3107e056da5" />
+</div>
+
+<img width="376" height="227" alt="satty-20261018-192130" src="https://github.com/user-attachments/assets/fa951ee8-2ace-4afe-baf1-0989973f22b0" />
 
 
 ## ✨ Funcionalidades
@@ -44,7 +55,9 @@ Após inserir sua chave de API, atualize os modelos antes de começar uma conver
 - **Multimodal** — envie imagens (PNG, JPG, WebP) como entrada para modelos
   compatíveis analisarem (GPT-4o, Claude, Gemini…)
 - **Pesquisa na web com fontes** — o botão 🌐 ao lado de "Enviar" liga a pesquisa na web do OpenRouter (`openrouter:web_search`) só para a próxima mensagem; as páginas consultadas aparecem numeradas, com link, no fim da resposta. O botão desliga sozinho após cada envio, porque a pesquisa tem custo extra. Funciona com modelos que aceitam ferramentas (tools), ex. Deepseek, Claude, Gemini, Qwen, Zai.
-- **Links clicáveis** — URLs nas respostas são renderizadas como links (imagens e planilhas). As imagens ficam salvas em /home/user/.local/share/por-ai/images e as planilhas em /home/user/.local/share/por-ai/spredsheets
+- **Links clicáveis** — URLs nas respostas são renderizadas como links (imagens e planilhas). As imagens ficam salvas em /home/user/.local/share/por-ai/images e as planilhas em /home/user/.local/share/por-ai/spreadsheets
+- **Filtro de privacidade** — escolha se o OpenRouter pode usar qualquer provedor, só os que não treinam com seus prompts, ou só os de retenção zero; neste último caso, a lista de modelos mostra apenas os compatíveis.
+- **Atualização automática do catálogo** — opcional, uma vez a cada 24 horas ao abrir o app
 - **Interface nativa** — GTK4 + Adwaita, integrada ao tema do sistema (modo escuro/claro automático). É possível personalizar escolhendo entre diversos temas como Dracula, Nord, Everforest.
 Exemplo de temas:
 <img width="460" height="560" alt="Imagem colada (15)" src="https://github.com/user-attachments/assets/1d1f0b1b-b544-4c7a-ba2d-9e387a2c33e1" />
@@ -90,32 +103,23 @@ python3 usr/share/por-ai/main.py
 
 ---
 
-## 🚀 Primeiro uso
-
-1. Abra o **Menu ▸ Preferências** e **cole sua chave da API** do [OpenRouter](https://openrouter.ai/keys)
-2. Use **Menu ▸ Atualizar modelos** para puxar o catálogo completo
-3. Clique no seletor de modelo no cabeçalho e escolha o modelo desejado
-4. **Enter** envia a mensagem — **Shift+Enter** quebra linha
-
----
-
 ## 🔒 Sobre privacidade
 
 O POR.ai roda no seu computador, mas depende da conexão com a internet — sem telemetria, sem servidor intermediário próprio. As conversas são salvas localmente em `~/.local/share/por-ai/` e a chave da API fica em `~/.config/por-ai/config.json` (permissão `0600`).
 
-O conteúdo das mensagens e arquivos anexados é enviado ao **OpenRouter**, que os encaminha ao provedor do modelo escolhido. Nas configurações da sua conta OpenRouter você pode restringir provedores que treinam com dados dos usuários.
+O conteúdo das mensagens e arquivos anexados é enviado ao **OpenRouter**, que os encaminha ao provedor do modelo escolhido. Cada provedor tem sua política de dados, indicada no site do OpenRouter por um escudo: **verde** não retém as conversas nem as usa para treinar IAs; **amarelo** pode reter, mas não treina com elas; **vermelho** retém e treina.
 
-Você pode fazer isso acessando Dashboard -> Personal -> Preferences -> Privacy.
-Clique em "+Add" para adicionar o nome do provedor.
-Para saber quais provedores adicionar basta clicar num modelo de IA que queira usar e aparecerá uma lista de todos os provedores. Os que tiverem o ícone de escudo em verde não retém as conversas e nem usam para treinamento das IAs, os que tiverem escudo em amarelo podem reter conversas mas não treinam com elas, e, por fim, os provedores com ícone em vermelho, retém e treinam com as conversas.
+### Pelo próprio app
 
-<img width="577" height="561" alt="satty-20261016-140424" src="https://github.com/user-attachments/assets/a5687d61-e8a7-4f8f-8d8d-246830c4fba3" />
+Em **Preferências ▸ OpenRouter ▸ Privacidade ▸ Provedores permitidos**, escolha:
 
+- **Todos** — qualquer provedor (a política da sua conta no OpenRouter continua valendo);
+- **Sem treino** — só provedores que não treinam com seus prompts (escudos amarelo e verde). A lista de modelos não muda; se um modelo não tiver provedor compatível, o app avisa no envio;
+- **Retenção zero** — só provedores que não retêm nem treinam com seus prompts (escudo verde). A lista de modelos passa a mostrar apenas os compatíveis.
 
-Abaixo um exemplo de como fica a lista de provedores após adicioná-los:
+Ao mudar essa opção, o app recarrega a lista de modelos automaticamente. A pesquisa na web (botão 🌐) usa um serviço de busca à parte, que não passa por esse filtro.
 
-
-<img width="1054" height="233" alt="Imagem colada (17)" src="https://github.com/user-attachments/assets/8d65b101-5a5d-4040-92a9-4bcb67bb38bc" />
+<img width="635" height="367" alt="satty-20261018-192242" src="https://github.com/user-attachments/assets/96ac2208-e950-4c46-a396-b9c3f89ca81b" />
 
 
 ---
