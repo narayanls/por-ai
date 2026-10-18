@@ -273,14 +273,6 @@ class ChatAssistant:
     ) -> Optional[Dict[str, Any]]:
         """Monta o parâmetro ``reasoning`` a partir da preferência do usuário.
 
-        "auto" não manda nada: cada modelo usa o próprio padrão. Antes o app
-        mandava ``reasoning.max_tokens`` = quase todo o teto de saída. Pela
-        documentação do OpenRouter, isso LIGA o pensamento em modelos onde
-        ele vem desligado (Claude, Gemini) com orçamento enorme, e em modelos
-        que só aceitam nível de esforço (GPT-5, Grok) a proporção
-        max_tokens do raciocínio / max_tokens total (~98%) é convertida no
-        nível de esforço mais alto. Resultado: toda mensagem, até um "oi",
-        pensava no máximo — daí a lentidão comparada ao chat do navegador.
         """
         if effort == "auto":
             return None
@@ -299,6 +291,50 @@ class ChatAssistant:
                 return {"effort": str(supported[-1])}
             return {"effort": "minimal"}
         return {"effort": effort}
+
+    @staticmethod
+    def _build_provider_param(
+        provider_sort: str, privacy_filter: str
+    ) -> Optional[Dict[str, Any]]:
+        """Monta o objeto ``provider`` (provider routing do OpenRouter).
+
+        * ``sort``: sem ele o OpenRouter balanceia pelos provedores mais
+          BARATOS, que nem sempre são os mais rápidos (pesa bastante em
+          modelos abertos: DeepSeek, Llama, GLM, Qwen...).
+        * ``data_collection: "deny"``: só provedores que não guardam os
+          prompts para treinar modelos (escudo amarelo ou verde no site).
+        * ``zdr: true``: só endpoints com retenção zero (escudo verde). Por
+          garantia vai junto com ``data_collection: "deny"``.
+
+        """
+        provider: Dict[str, Any] = {}
+        if provider_sort:
+            provider["sort"] = provider_sort
+        if privacy_filter in ("no_training", "zdr"):
+            provider["data_collection"] = "deny"
+        if privacy_filter == "zdr":
+            provider["zdr"] = True
+        return provider or None
+
+    def _explain_privacy_error(self, message: str) -> str:
+        """Com o filtro de privacidade ligado, modelos sem nenhum provedor
+        compatível falham com um erro genérico ("No endpoints found…").
+        Acrescenta a causa provável para o usuário não ficar sem pista."""
+        if not self.config.privacy_filter:
+            return message
+        lowered = message.lower()
+        if "endpoint" not in lowered and "data policy" not in lowered:
+            return message
+        level = (
+            "retenção zero"
+            if self.config.privacy_filter == "zdr"
+            else "sem treino com os seus dados"
+        )
+        return (
+            f"{message}\n\nNenhum provedor deste modelo atende ao filtro de "
+            f"privacidade ({level}). Escolha outro modelo ou afrouxe o filtro "
+            "em Preferências ▸ OpenRouter ▸ Privacidade."
+        )
 
     @staticmethod
     def _extract_limits(
@@ -549,12 +585,11 @@ class ChatAssistant:
                 if reasoning:
                     extra["reasoning"] = reasoning
 
-            provider_sort = self.config.provider_sort
-            if provider_sort:
-                # Padrão do OpenRouter: balancear pelos provedores mais
-                # BARATOS, que nem sempre são os mais rápidos (pesa bastante
-                # em modelos abertos: DeepSeek, Llama, GLM, Qwen...).
-                extra["provider"] = {"sort": provider_sort}
+            provider = self._build_provider_param(
+                self.config.provider_sort, self.config.privacy_filter
+            )
+            if provider:
+                extra["provider"] = provider
 
             # Sinaliza se algum pedaço da resposta (raciocínio ou conteúdo)
             # já chegou a ser entregue à UI. Uma vez True, uma falha de rede
@@ -665,7 +700,7 @@ class ChatAssistant:
 
             GLib.idle_add(on_done, display, full, sources)
         except OpenRouterError as exc:
-            GLib.idle_add(on_error, str(exc))
+            GLib.idle_add(on_error, self._explain_privacy_error(str(exc)))
         except Exception as exc:  # pylint: disable=broad-except
             logger.exception("Erro inesperado no chat")
             GLib.idle_add(on_error, str(exc))
@@ -693,6 +728,8 @@ class ChatAssistant:
                         if isinstance(item, dict) and item.get("id")
                     }
                 )
+                if self.config.privacy_filter == "zdr":
+                    ids = self._keep_zdr_models(client, ids)
                 GLib.idle_add(on_done, ids)
             except OpenRouterError as exc:
                 GLib.idle_add(on_error, str(exc))
@@ -701,6 +738,28 @@ class ChatAssistant:
                 GLib.idle_add(on_error, str(exc))
 
         threading.Thread(target=worker, daemon=True).start()
+
+    # O roteador automático não é um modelo com provedores próprios (ele
+    # escolhe um modelo na hora do envio), então não aparece na lista ZDR.
+    # Fica no seletor; se não houver opção compatível, o envio avisa.
+    _ZDR_ALWAYS_KEEP = ("openrouter/auto",)
+
+    @classmethod
+    def _keep_zdr_models(cls, client: OpenRouterClient, ids: List[str]) -> List[str]:
+        """Deixa só os modelos com pelo menos um provedor de retenção zero.
+
+        Sem a lista ZDR não dá para saber quais modelos funcionariam; em vez
+        de mostrar o catálogo inteiro (e o usuário só descobrir no erro do
+        envio), a atualização falha com uma mensagem clara."""
+        try:
+            zdr_ids = client.list_zdr_model_ids()
+        except OpenRouterError as exc:
+            raise OpenRouterError(
+                "Não foi possível obter a lista de provedores com retenção "
+                f"zero, então o catálogo não foi atualizado: {exc}",
+                retryable=exc.retryable,
+            ) from exc
+        return [i for i in ids if i in zdr_ids or i in cls._ZDR_ALWAYS_KEEP]
 
     # ------------------------------------------------------------------ #
     # Suporte a anexos                                                     #

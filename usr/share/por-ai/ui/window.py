@@ -65,7 +65,7 @@ except Exception as _exc:  # pylint: disable=broad-except
     _UPDATE_AVAILABLE = False
 
 
-APP_VERSION = "0.1.9.6"
+APP_VERSION = "0.1.9.8"
 
 _CSS = b"""
 .message-bubble {
@@ -144,6 +144,8 @@ class PorAiWindow(Adw.ApplicationWindow):
         # True entre o balão do menu (Preferências/Temas) e o do seletor de
         # modelo, que vem logo depois dele.
         self._model_hint_pending = False
+        self._models_fetch_running = False
+        self._prefs_open = False
         self.connect("close-request", self._on_close_request)
 
 
@@ -163,6 +165,13 @@ class PorAiWindow(Adw.ApplicationWindow):
         # Baixa o catálogo de modelos em segundo plano, para a primeira
         # mensagem não ter que esperar por ele (ver prewarm_model_cache).
         GLib.timeout_add_seconds(1, self._prewarm_models)
+
+        # Atualização automática do catálogo (se ligada em Preferências):
+        # confere ao abrir e depois a cada hora, porque com o ícone na
+        # bandeja o app pode ficar dias aberto sem ser "aberto de novo".
+        # A regra das 24h fica em Config.models_update_due.
+        GLib.timeout_add_seconds(3, self._maybe_auto_update_models)
+        GLib.timeout_add_seconds(60 * 60, self._auto_update_models_tick)
 
         #Verifica atualizações silenciosamente
         if _UPDATE_AVAILABLE:
@@ -2170,22 +2179,74 @@ class PorAiWindow(Adw.ApplicationWindow):
         if not self.config.is_configured():
             self._toast("Configure a chave da API para buscar modelos.")
             return
+        if self._models_fetch_running:
+            self._toast("O catálogo de modelos já está sendo atualizado…")
+            return
         self._toast("Buscando catálogo de modelos…")
-        self.assistant.fetch_models(
-            on_done=self._on_models_fetched,
-            on_error=lambda msg: self._toast(msg) or False,
-        )
+        self._start_models_fetch(automatic=False)
 
-    def _on_models_fetched(self, model_ids: List[str]) -> bool:
+    def _start_models_fetch(self, automatic: bool) -> None:
+        self._models_fetch_running = True
+
+        def on_done(model_ids: List[str]) -> bool:
+            self._models_fetch_running = False
+            return self._on_models_fetched(model_ids, automatic=automatic)
+
+        def on_error(message: str) -> bool:
+            self._models_fetch_running = False
+            if automatic:
+                # Sem rede ao abrir o app etc.: não incomoda. Como o horário
+                # não foi registrado, tenta de novo na próxima checagem.
+                logger.info("Atualização automática de modelos falhou: %s", message)
+            else:
+                self._toast(message)
+            return False
+
+        self.assistant.fetch_models(on_done=on_done, on_error=on_error)
+
+    def _maybe_auto_update_models(self) -> bool:
+        """Atualiza o catálogo se a opção estiver ligada e já tiver passado
+        24h desde a última atualização. Chamado via GLib (retorna False)."""
+        if (
+            self.config.is_configured()
+            and not self._models_fetch_running
+            and not self._prefs_open
+            and self.config.models_update_due(time.time())
+        ):
+            logger.info("Atualizando o catálogo de modelos automaticamente.")
+            self._start_models_fetch(automatic=True)
+        return False
+
+    def _auto_update_models_tick(self) -> bool:
+        self._maybe_auto_update_models()
+        return True  # timer periódico: continua ativo
+
+    def _on_models_fetched(self, model_ids: List[str], automatic: bool = False) -> bool:
         if not model_ids:
-            self._toast("Nenhum modelo retornado.")
+            if not automatic:
+                if self.config.privacy_filter == "zdr":
+                    self._toast(
+                        "Nenhum modelo com retenção zero disponível. A lista "
+                        "anterior foi mantida."
+                    )
+                else:
+                    self._toast("Nenhum modelo retornado.")
             return False
         current = self._current_model()
         self.config.models = model_ids
+        # Vale para a atualização manual também: quem acabou de atualizar
+        # pelo menu não precisa de outra automática nas próximas 24h.
+        self.config.set("models_updated_at", int(time.time()))
         self.config.save()
         self._model_list = list(model_ids)
         self._select_model(current if current in model_ids else model_ids[0])
-        self._toast(f"{len(model_ids)} modelos disponíveis.")
+        suffix = " com retenção zero" if self.config.privacy_filter == "zdr" else ""
+        if automatic:
+            self._toast(
+                f"Catálogo atualizado automaticamente: {len(model_ids)} modelos{suffix}."
+            )
+        else:
+            self._toast(f"{len(model_ids)} modelos disponíveis{suffix}.")
         # Primeira vez com o catálogo carregado: apresenta o menu e o seletor.
         GLib.timeout_add(600, self._maybe_show_tour)
         return False
@@ -2233,6 +2294,24 @@ class PorAiWindow(Adw.ApplicationWindow):
         #Sem chave=fluxo inicial de ativação; Com chave, mostra próximo passo.
         needs_key = not self.config.is_configured()
         prefs = PreferencesWindow(self, self.config, on_saved=self._on_prefs_saved)
+        self._prefs_open = True
+        privacy_before = self.config.privacy_filter
+
+        def on_prefs_closed(*_args) -> None:
+            self._prefs_open = False
+            if (
+                self.config.privacy_filter != privacy_before
+                and self.config.is_configured()
+                and self.config.get(self._MODELS_HINT_KEY, False)
+            ):
+                # "Retenção zero" filtra o catálogo: ao ligar ou desligar,
+                # a lista precisa ser baixada de novo. (Na primeira
+                # execução quem cuida disso é o guia — ver balão 2.)
+                GLib.idle_add(self._on_refresh_models)
+            else:
+                GLib.idle_add(self._maybe_auto_update_models)
+
+        prefs.connect("destroy", on_prefs_closed)
         if needs_key and isinstance(prefs, Gtk.Widget):
             prefs.connect(
                 "unmap",
@@ -2244,14 +2323,18 @@ class PorAiWindow(Adw.ApplicationWindow):
     # Guia de primeira execução                                            #
     # ------------------------------------------------------------------ #
 
-    # Três balões, sempre um de cada vez:
+    # Quatro balões, sempre um de cada vez:
     #
-    #   1. depois de configurar a chave   → no menu: "carregar os modelos"
-    #   2. depois de atualizar os modelos → no menu: Preferências e Temas
-    #   3. logo depois do 2               → no seletor: "escolha o modelo"
+    #   1. depois de configurar a chave   → no menu: filtro de privacidade
+    #                                       (vem antes porque "Retenção
+    #                                       zero" muda a lista de modelos)
+    #   2. logo depois do 1               → no menu: "carregar os modelos"
+    #                                       (agora ou sempre automático)
+    #   3. depois de atualizar os modelos → no menu: Preferências e Temas
+    #   4. logo depois do 3               → no seletor: "escolha o modelo"
     #
-    # O 1 e a dupla 2+3 aparecem uma única vez por computador; as chaves
-    # abaixo registram isso na config.
+    # A dupla 1+2 e a dupla 3+4 aparecem uma única vez por computador; as
+    # chaves abaixo registram isso na config.
     _MODELS_HINT_KEY = "models_hint_shown"
     _TOUR_HINT_KEY = "tour_hints_shown"
 
@@ -2267,31 +2350,62 @@ class PorAiWindow(Adw.ApplicationWindow):
             and not self.config.get(self._MODELS_HINT_KEY, False)
             and self._menu_button.get_mapped()
         ):
-            self._show_models_hint()
+            self._show_privacy_hint()
             self.config.set(self._MODELS_HINT_KEY, True)
             self.config.save()
         return False
 
+    def _show_privacy_hint(self) -> None:
+        """Balão 1: escolha do filtro de privacidade, direto no balão. Vem
+        antes de carregar os modelos porque "Retenção zero" filtra a lista."""
+        self._show_hint(
+            self._menu_button,
+            "Antes: quem pode receber suas mensagens?",
+            "Com Retenção zero, só aparecem modelos com provedores que não "
+            "guardam nem treinam com elas. Você pode mudar isso depois em "
+            "Preferências ▸ OpenRouter ▸ Privacidade.",
+            [
+                ("Todos", lambda _b: self._on_privacy_hint_choice(""), False),
+                ("Sem treino", lambda _b: self._on_privacy_hint_choice("no_training"), False),
+                ("Retenção zero", lambda _b: self._on_privacy_hint_choice("zdr"), False),
+            ],
+        )
+
+    def _on_privacy_hint_choice(self, value: str) -> None:
+        """Grava a escolha (a mesma opção de Preferências) e segue para o
+        balão de carregar os modelos."""
+        self.config.privacy_filter = value
+        self.config.save()
+        self._show_models_hint()
+
     def _show_models_hint(self) -> None:
-        """Balão 1: ancorado no botão de menu, explicando o próximo passo."""
+        """Balão 2: ancorado no botão de menu, explicando o próximo passo."""
         self._show_hint(
             self._menu_button,
             "Próximo passo: carregar os modelos",
-            "Clique em Atualizar Agora. Neste menu, futuramente, você pode atualizar sempre que quiser.",
+            "Clique em Atualizar agora. Depois, você pode atualizar por este "
+            "menu quando quiser, ou deixar automático: o app atualiza ao "
+            "abrir, no máximo uma vez por dia.",
             [
-               
+                ("Deixar automático", self._on_models_hint_auto, False),
                 ("Atualizar agora", self._on_models_hint_refresh, True),
             ],
         )
 
     def _on_models_hint_refresh(self, _button) -> None:
         """Atalho do balão: faz o mesmo que o item do menu."""
-        
+        self._on_refresh_models()
+
+    def _on_models_hint_auto(self, _button) -> None:
+        """Liga a atualização automática (a mesma opção de Preferências) e
+        já faz a primeira atualização, que registra o horário das 24h."""
+        self.config.set("auto_update_models", True)
+        self.config.save()
         self._on_refresh_models()
 
     def _maybe_show_tour(self) -> bool:
-        """Depois de atualizar os modelos, apresenta o menu (balão 2) e, em
-        seguida, o seletor de modelo (balão 3) — uma única vez.
+        """Depois de atualizar os modelos, apresenta o menu (balão 3) e, em
+        seguida, o seletor de modelo (balão 4) — uma única vez.
 
         Chamado via GLib.timeout_add, então retorna False para não repetir.
         """
@@ -2305,7 +2419,7 @@ class PorAiWindow(Adw.ApplicationWindow):
         return False
 
     def _show_menu_hint(self) -> None:
-        """Balão 2: no mesmo botão de menu, apontando Preferências e Temas."""
+        """Balão 3: no mesmo botão de menu, apontando Preferências e Temas."""
         self._model_hint_pending = True
         self._show_hint(
             self._menu_button,
@@ -2316,7 +2430,7 @@ class PorAiWindow(Adw.ApplicationWindow):
         )
 
     def _show_model_hint(self, *_args) -> bool:
-        """Balão 3: no seletor de modelo. Só aparece na sequência do balão 2.
+        """Balão 4: no seletor de modelo. Só aparece na sequência do balão 3.
 
         Também é chamado via GLib.timeout_add (ver _on_menu_popover_closed),
         por isso retorna False.
@@ -2332,8 +2446,8 @@ class PorAiWindow(Adw.ApplicationWindow):
         return False
 
     def _on_menu_popover_closed(self, *_args) -> None:
-        # O menu foi aberto com o balão 2 na tela (o que o fecha): em vez de
-        # perder o balão 3, ele aparece assim que o menu for fechado.
+        # O menu foi aberto com o balão 3 na tela (o que o fecha): em vez
+        # de perder o balão 4, ele aparece assim que o menu for fechado.
         if self._model_hint_pending:
             GLib.timeout_add(300, self._show_model_hint)
 
@@ -2346,6 +2460,8 @@ class PorAiWindow(Adw.ApplicationWindow):
 
         ``actions`` é uma lista de ``(rótulo, callback, destacado)``; o
         callback recebe o botão clicado, como em qualquer sinal "clicked".
+        Todos os botões usam a cor de destaque do sistema, para os balões
+        terem uma estética só; ``destacado`` fica por compatibilidade.
         """
         self._dismiss_hint()
 
@@ -2374,7 +2490,7 @@ class PorAiWindow(Adw.ApplicationWindow):
         buttons.set_halign(Gtk.Align.END)
         for label, callback, suggested in actions:
             button = Gtk.Button(label=label)
-            button.add_css_class("suggested-action" if suggested else "flat")
+            button.add_css_class("suggested-action")
             button.connect("clicked", callback)
             buttons.append(button)
         box.append(buttons)

@@ -48,6 +48,19 @@ _PROVIDER_SORT_OPTIONS = [
 ]
 
 
+_PRIVACY_OPTIONS = [
+    ("", "Todos",
+     "Qualquer provedor, inclusive os que retêm e treinam com os prompts "
+     "(a política da sua conta no site do OpenRouter continua valendo)."),
+    ("no_training", "Sem treino",
+     "Só provedores que não treinam com os seus prompts. Alguns ainda podem "
+     "retê-los por um tempo (escudo amarelo no site). A lista de "
+     "modelos não muda; um modelo sem provedor compatível avisa no envio."),
+    ("zdr", "Retenção zero",
+     "Só provedores que não retêm nem treinam com os seus prompts (escudo "
+     "verde no site). A lista de modelos passa a mostrar só os compatíveis."),
+]
+
 class PreferencesWindow(Adw.PreferencesWindow):
     def __init__(
         self,
@@ -126,6 +139,21 @@ class PreferencesWindow(Adw.PreferencesWindow):
 
         page.add(group)
 
+        privacy_group = Adw.PreferencesGroup()
+        privacy_group.set_title("Privacidade")
+        privacy_group.set_description(
+            "Filtra para quais provedores o OpenRouter pode enviar suas "
+            "mensagens. A pesquisa na web usa um serviço de busca à parte, "
+            "que não passa por este filtro."
+        )
+        self._privacy_row = self._make_combo_row(
+            "Provedores permitidos",
+            _PRIVACY_OPTIONS,
+            self.config.privacy_filter,
+        )
+        privacy_group.add(self._privacy_row)
+        page.add(privacy_group)
+
         models_group = Adw.PreferencesGroup()
         models_group.set_title("Modelos favoritos")
         models_group.set_description(
@@ -148,6 +176,16 @@ class PreferencesWindow(Adw.PreferencesWindow):
         models_scroller.set_child(self._models_view)
         models_scroller.add_css_class("card")
 
+        self._auto_models_row = Adw.SwitchRow()
+        self._auto_models_row.set_title("Atualizar modelos automaticamente")
+        self._auto_models_row.set_subtitle(
+            "Puxa o catálogo do OpenRouter ao abrir o app, no máximo uma vez "
+            "a cada 24 horas. Substitui a lista abaixo, como o item do menu."
+        )
+        self._auto_models_row.set_active(self.config.auto_update_models)
+        models_group.add(self._auto_models_row)
+
+        models_scroller.set_margin_top(12)
         models_group.add(models_scroller)
         page.add(models_group)
 
@@ -328,6 +366,11 @@ class PreferencesWindow(Adw.PreferencesWindow):
         self.config.provider_sort = self._combo_value(
             self._provider_sort_row, _PROVIDER_SORT_OPTIONS
         )
+
+        self.config.privacy_filter = self._combo_value(
+            self._privacy_row, _PRIVACY_OPTIONS
+        )
+        self.config.set("auto_update_models", self._auto_models_row.get_active())
 
         models_text = self._buffer_text(self._models_view)
         models = [line.strip() for line in models_text.splitlines() if line.strip()]
