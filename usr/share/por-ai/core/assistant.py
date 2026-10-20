@@ -2,7 +2,13 @@
 Coordenador de chat do POR.ai.
 
 Formatos de texto suportados (enviados como bloco na mensagem):
-  txt, md, rst, org, tex, csv, log, json, py, pdf, odt, ods, xlsx
+  txt, md, rst, org, tex, csv, log, json, py, toml, kdl, svg,
+  pdf, odt, ods, xlsx
+
+SVG vai de duas formas: rasterizado para PNG (os provedores do OpenRouter
+só aceitam imagens rasterizadas em image_url, então é assim que o modelo
+"vê" o desenho) e como código XML (para o modelo poder ler e editar). Ver
+read_svg_attachment.
 
 Formatos de imagem suportados (enviados como base64 multimodal):
   jpg, jpeg, png, webp
@@ -58,6 +64,22 @@ try:
 except ImportError:
     XLSX_AVAILABLE = False
 
+# GdkPixbuf + o loader de SVG da librsvg (dependência do gtk4) fazem a
+# rasterização dos anexos .svg. Se faltar, o SVG ainda vai como texto.
+try:
+    import gi
+
+    gi.require_version("GdkPixbuf", "2.0")
+    from gi.repository import GdkPixbuf
+
+    SVG_RASTER_AVAILABLE = any(
+        "svg" in (fmt.get_name() or "").lower()
+        for fmt in GdkPixbuf.Pixbuf.get_formats()
+    )
+except (ImportError, ValueError):
+    GdkPixbuf = None
+    SVG_RASTER_AVAILABLE = False
+
 # sheet_gen não tem dependência dura: cada backend se autodetecta lá dentro,
 # então o import nunca falha por falta de odfpy ou openpyxl.
 from core.sheet_gen import (
@@ -74,8 +96,11 @@ _TEXT_EXTENSIONS = {
     ".txt", ".md", ".markdown", ".rst", ".org",
     ".tex", ".csv", ".log",
     ".json", ".py",
+    ".toml", ".kdl",
 }
 _IMAGE_EXTENSIONS = {".jpg", ".jpeg", ".png", ".webp"}
+# Vetorial: vai como PNG rasterizado + código (ver read_svg_attachment).
+_SVG_EXTENSIONS = {".svg"}
 
 logger = logging.getLogger(__name__)
 
@@ -770,11 +795,18 @@ class ChatAssistant:
         return os.path.splitext(path)[1].lower() in _IMAGE_EXTENSIONS
 
     @staticmethod
+    def is_svg(path: str) -> bool:
+        return os.path.splitext(path)[1].lower() in _SVG_EXTENSIONS
+
+    @staticmethod
     def supported_attachment(path: str) -> bool:
         ext = os.path.splitext(path)[1].lower()
         if ext in _TEXT_EXTENSIONS:
             return True
         if ext in _IMAGE_EXTENSIONS:
+            return True
+        if ext in _SVG_EXTENSIONS:
+            # Sem o rasterizador o SVG ainda vai como texto.
             return True
         if ext == ".pdf":
             return PDF_AVAILABLE
@@ -815,9 +847,12 @@ class ChatAssistant:
             return ChatAssistant._read_xlsx(path)
         try:
             with open(path, "r", encoding="utf-8", errors="replace") as f:
-                return f.read()
+                text = f.read()
         except OSError as exc:
             raise RuntimeError(f"Erro ao ler arquivo: {exc}") from exc
+        if ext in _SVG_EXTENSIONS:
+            text = ChatAssistant._strip_svg_data_uris(text)
+        return text
 
     # Alias para compatibilidade com código existente.
     read_attachment = read_text_attachment
@@ -875,6 +910,83 @@ class ChatAssistant:
             "type": "image_url",
             "image_url": {"url": f"data:{mime};base64,{data}"},
         }
+
+    # ------------------------------------------------------------------ #
+    # SVG                                                                  #
+    # ------------------------------------------------------------------ #
+
+    # Lado maior do PNG gerado a partir do SVG. Vetor não tem tamanho
+    # "real": ícones de 16-24 px seriam ilegíveis para o modelo, e desenhos
+    # de 5000 px gastariam tokens à toa. 1024 é nítido e barato.
+    _SVG_RASTER_SIZE = 1024
+
+    # Imagens embutidas (<image href="data:image/png;base64,...">) podem
+    # deixar um SVG exportado com megabytes de base64, que como texto
+    # custariam uma fortuna em tokens e não dizem nada ao modelo. No código
+    # enviado elas viram um marcador; no PNG continuam aparecendo.
+    _RE_SVG_DATA_URI = re.compile(
+        r"data:([\w.+-]+/[\w.+-]+)((?:;[\w.+-]+=[^;,\s\"']*)*);base64,[A-Za-z0-9+/=\s]+"
+    )
+
+    @staticmethod
+    def _strip_svg_data_uris(text: str) -> str:
+        return ChatAssistant._RE_SVG_DATA_URI.sub(
+            lambda m: f"data:{m.group(1)};base64,[imagem embutida omitida]", text
+        )
+
+    @staticmethod
+    def rasterize_svg(path: str) -> Dict[str, Any]:
+        """Renderiza um SVG em PNG e devolve o bloco multimodal ``image_url``.
+
+        O fundo transparente é achatado sobre branco: muitos SVGs (ícones,
+        diagramas) são traços escuros sobre fundo transparente, e alguns
+        provedores tratam a transparência como preto — o modelo veria uma
+        imagem toda preta.
+        """
+        if not SVG_RASTER_AVAILABLE:
+            raise RuntimeError(
+                "Rasterização de SVG indisponível (falta o loader de SVG da "
+                "librsvg para o gdk-pixbuf)."
+            )
+        size = ChatAssistant._SVG_RASTER_SIZE
+        try:
+            # Com preserve_aspect_ratio=True o SVG é escalado (para cima ou
+            # para baixo) até caber num quadrado size x size.
+            pixbuf = GdkPixbuf.Pixbuf.new_from_file_at_scale(path, size, size, True)
+            if pixbuf.get_has_alpha():
+                width, height = pixbuf.get_width(), pixbuf.get_height()
+                # Xadrez com as duas cores brancas = fundo branco liso.
+                pixbuf = pixbuf.composite_color_simple(
+                    width, height, GdkPixbuf.InterpType.BILINEAR,
+                    255, max(width, height), 0xFFFFFF, 0xFFFFFF,
+                )
+            ok, data = pixbuf.save_to_bufferv("png", [], [])
+        except Exception as exc:  # GLib.Error, SVG malformado etc.
+            raise RuntimeError(f"Erro ao rasterizar SVG: {exc}") from exc
+        if not ok or not data:
+            raise RuntimeError("Erro ao rasterizar SVG: PNG vazio.")
+        encoded = base64.b64encode(bytes(data)).decode("ascii")
+        return {
+            "type": "image_url",
+            "image_url": {"url": f"data:image/png;base64,{encoded}"},
+        }
+
+    @staticmethod
+    def read_svg_attachment(path: str) -> Tuple[str, Optional[Dict[str, Any]]]:
+        """Lê um SVG e devolve ``(código, bloco_png)``.
+
+        O código vai como texto (o modelo pode ler e editar o desenho) e o
+        PNG como imagem (o modelo vê o resultado). Se a rasterização falhar
+        — loader ausente, SVG que a librsvg não entende —, devolve só o
+        código, com ``None`` no lugar do PNG, em vez de impedir o envio.
+        """
+        text = ChatAssistant.read_text_attachment(path)
+        try:
+            image = ChatAssistant.rasterize_svg(path)
+        except RuntimeError as exc:
+            logger.info("SVG enviado só como texto (%s): %s", path, exc)
+            image = None
+        return text, image
 
     _RE_DATA_URI = re.compile(r"^data:([^;]+);base64,(.+)$", re.DOTALL)
 
