@@ -805,7 +805,7 @@ class PorAiWindow(Adw.ApplicationWindow):
             label=(
                 "Note que há modelos pagos e gratuitos. Através do site do "
                 "OpenRouter você pode adicionar saldo ou pesquisar por "
-                "modelos que não geram custos."
+                "free para encontrar modelos que não geram custos."
             )
         )
         warning_label.set_wrap(True)
