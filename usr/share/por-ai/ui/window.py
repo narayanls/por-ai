@@ -95,7 +95,7 @@ _CSS = b"""
 
 
 class PorAiWindow(Adw.ApplicationWindow):
-    MAX_ATTACHMENTS = 4
+    MAX_ATTACHMENTS = 6
 
     def __init__(self, application: Adw.Application, config: Config) -> None:
         super().__init__(application=application)
@@ -448,7 +448,9 @@ class PorAiWindow(Adw.ApplicationWindow):
         # Barra de chips de anexo (FlowBox: quebra linha quando há vários).
         self._attachment_bar = Gtk.FlowBox()
         self._attachment_bar.set_selection_mode(Gtk.SelectionMode.NONE)
-        self._attachment_bar.set_max_children_per_line(self.MAX_ATTACHMENTS)
+        # Até 3 chips por linha: com 6 anexos ficam duas linhas, em vez de
+        # uma linha só larga demais para janelas estreitas.
+        self._attachment_bar.set_max_children_per_line(3)
         self._attachment_bar.set_column_spacing(6)
         self._attachment_bar.set_row_spacing(6)
         self._attachment_bar.set_visible(False)
@@ -460,8 +462,9 @@ class PorAiWindow(Adw.ApplicationWindow):
         attach_button = Gtk.Button()
         attach_button.set_icon_name("mail-attachment-symbolic")
         attach_button.set_tooltip_text(
-            "Anexar arquivos — até 4 "
-            "(pdf, odt, ods, xlsx, txt, md, csv, json, py, png, jpg, webp)"
+            f"Anexar arquivos — até {self.MAX_ATTACHMENTS} "
+            "(pdf, odt, ods, xlsx, txt, md, csv, json, py, toml, kdl, svg, "
+            "png, jpg, webp)"
         )
         attach_button.add_css_class("flat")
         attach_button.set_valign(Gtk.Align.END)
@@ -805,7 +808,7 @@ class PorAiWindow(Adw.ApplicationWindow):
             label=(
                 "Note que há modelos pagos e gratuitos. Através do site do "
                 "OpenRouter você pode adicionar saldo ou pesquisar por "
-                "modelos que não geram custos."
+                "free para encontrar modelos que não geram custos."
             )
         )
         warning_label.set_wrap(True)
@@ -1038,6 +1041,16 @@ class PorAiWindow(Adw.ApplicationWindow):
                         image_parts.append(
                             self.assistant.read_image_attachment(path)
                         )
+                    elif self.assistant.is_svg(path):
+                        # PNG para o modelo ver + código para poder editar.
+                        svg_text, svg_png = self.assistant.read_svg_attachment(path)
+                        text_blocks.append(
+                            f"--- INÍCIO DO ARQUIVO: {filename} ---\n"
+                            f"{svg_text}\n"
+                            f"--- FIM DO ARQUIVO ---"
+                        )
+                        if svg_png is not None:
+                            image_parts.append(svg_png)
                     else:
                         file_text = self.assistant.read_text_attachment(path)
                         text_blocks.append(
@@ -1784,6 +1797,7 @@ class PorAiWindow(Adw.ApplicationWindow):
         for pattern in (
             "*.txt", "*.md", "*.markdown", "*.rst", "*.org",
             "*.tex", "*.csv", "*.log", "*.json", "*.py",
+            "*.toml", "*.kdl", "*.svg",
             "*.pdf", "*.odt", "*.ods", "*.xlsx",
             "*.png", "*.jpg", "*.jpeg", "*.webp",
         ):
@@ -1860,7 +1874,7 @@ class PorAiWindow(Adw.ApplicationWindow):
 
         icon_name = (
             "image-x-generic-symbolic"
-            if self.assistant.is_image(path)
+            if self.assistant.is_image(path) or self.assistant.is_svg(path)
             else "mail-attachment-symbolic"
         )
         icon = Gtk.Image.new_from_icon_name(icon_name)

@@ -54,7 +54,7 @@ _PRIVACY_OPTIONS = [
      "(a política da sua conta no site do OpenRouter continua valendo)."),
     ("no_training", "Sem treino",
      "Só provedores que não treinam com os seus prompts. Alguns ainda podem "
-     "retê-los por um tempo (escudo amarelo no site). A lista de "
+     "retê-los por um tempo (escudos amarelo e verde no site). A lista de "
      "modelos não muda; um modelo sem provedor compatível avisa no envio."),
     ("zdr", "Retenção zero",
      "Só provedores que não retêm nem treinam com os seus prompts (escudo "
@@ -292,8 +292,8 @@ class PreferencesWindow(Adw.PreferencesWindow):
         group.set_title("Velocidade e raciocínio")
         group.set_description(
             "Modelos que “pensam” antes de responder ficam mais lentos quanto "
-            "maior o esforço. O tempo gasto em cada etapa aparece no terminal "
-            "(linha “[por-ai][debug] tempos”)."
+            "maior o esforço. O tempo gasto em cada etapa aparece no chat. "
+            
         )
 
         self._reasoning_row = self._make_combo_row(

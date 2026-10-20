@@ -25,21 +25,22 @@ CONFIG_FILENAME = "config.json"
 
 # Prompt de sistema padrão. Pode ser alterado em Preferências.
 DEFAULT_SYSTEM_PROMPT = (
-    "Você é um assistente útil, direto e honesto. Responda em português do "
-    "Brasil, a menos que o usuário peça outro idioma. Quando o usuário enviar "
+    "Você é um assistente útil, direto e honesto. Responda no idioma do "
+    "usuário, a menos que o usuário peça outro idioma. Quando o usuário enviar "
     "um arquivo para análise, não o "
-    "reescreva sem ser solicitado."
+    "reescreva sem ser solicitado. Quando não souber a resposta de uma pergunta "
+    "informe o usuário de sua limitação e o oriente de como pode encontrar a resposta."
 )
 
 # Lista inicial de modelos favoritos exibidos no seletor. O usuário pode
 # atualizar a lista completa do catálogo do OpenRouter pelo menu do app.
 DEFAULT_MODELS: List[str] = [
     "openrouter/auto",
-    "anthropic/claude-3.5-sonnet",
-    "google/gemini-2.0-flash-001",
-    "openai/gpt-4o-mini",
-    "deepseek/deepseek-chat",
-    "meta-llama/llama-3.3-70b-instruct",
+    "anthropic/claude-haiku-5.5",
+    "google/gemini-3.5-flash-lite",
+    "deepseek/deepseek-v4.1-flash-1017",
+    "z-ai/glm-5.3-flash",
+    "moonshotai/kimi-k2.6",
 ]
 
 DEFAULTS: Dict[str, Any] = {
