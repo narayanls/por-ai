@@ -17,7 +17,7 @@ gi.require_version("Gtk", "4.0")
 gi.require_version("Adw", "1")
 from gi.repository import Adw, GLib, Gtk
 
-from core.config import Config
+from core.config import DEFAULT_SYSTEM_PROMPT, Config
 
 # Opções dos seletores: (valor gravado na config, rótulo curto, explicação).
 # O rótulo é curto de propósito: o Adw.ComboRow corta com reticências o que
@@ -276,6 +276,25 @@ class PreferencesWindow(Adw.PreferencesWindow):
         self._prompt_view.set_right_margin(8)
         self._prompt_view.get_buffer().set_text(self.config.system_prompt)
 
+        # Volta ao prompt padrão da versão instalada (que daí em diante
+        # acompanha as atualizações do app). Só fica ativo quando o texto da
+        # caixa difere do padrão.
+        self._prompt_reset_button = Gtk.Button(label="Restaurar padrão")
+        self._prompt_reset_button.add_css_class("flat")
+        self._prompt_reset_button.set_valign(Gtk.Align.CENTER)
+        self._prompt_reset_button.set_tooltip_text(
+            "Voltar ao prompt de sistema padrão do POR.ai"
+        )
+        self._prompt_reset_button.connect(
+            "clicked",
+            lambda *_: self._prompt_view.get_buffer().set_text(DEFAULT_SYSTEM_PROMPT),
+        )
+        prompt_group.set_header_suffix(self._prompt_reset_button)
+        self._prompt_view.get_buffer().connect(
+            "changed", self._sync_prompt_reset_button
+        )
+        self._sync_prompt_reset_button()
+
         prompt_scroller = Gtk.ScrolledWindow()
         prompt_scroller.set_min_content_height(160)
         prompt_scroller.set_policy(Gtk.PolicyType.AUTOMATIC, Gtk.PolicyType.AUTOMATIC)
@@ -286,6 +305,12 @@ class PreferencesWindow(Adw.PreferencesWindow):
         page.add(prompt_group)
 
         self.add(page)
+
+    def _sync_prompt_reset_button(self, *_args) -> None:
+        text = self._buffer_text(self._prompt_view).strip()
+        self._prompt_reset_button.set_sensitive(
+            text != DEFAULT_SYSTEM_PROMPT.strip()
+        )
 
     def _build_speed_group(self) -> Adw.PreferencesGroup:
         group = Adw.PreferencesGroup()
@@ -358,7 +383,8 @@ class PreferencesWindow(Adw.PreferencesWindow):
         #self.config.set("site_url", self._site_url_row.get_text().strip())
         self.config.set("stream", self._stream_row.get_active())
         self.config.set("temperature", round(self._temperature_scale.get_value(), 2))
-        self.config.set("system_prompt", self._buffer_text(self._prompt_view))
+        # Pelo setter: texto igual ao padrão não é gravado (ver Config).
+        self.config.system_prompt = self._buffer_text(self._prompt_view)
         self.config.set("show_tray_icon", self._tray_row.get_active())
         self.config.reasoning_effort = self._combo_value(
             self._reasoning_row, _REASONING_OPTIONS
