@@ -93,6 +93,13 @@ sudo apt install ./por-ai_*.deb
 
 ---
 
+### Pacote universal Flatpak
+Baixe o `.flatpak` na [página de releases](https://github.com/narayanls/por-ai/releases/latest) e instale com:
+```sh
+flatpak install --user ./por-ai*.flatpak
+```
+
+---
 ### Rodando direto do código-fonte
 
 ```sh
