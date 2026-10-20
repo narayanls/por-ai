@@ -32,6 +32,14 @@ DEFAULT_SYSTEM_PROMPT = (
     "informe o usuário de sua limitação e o oriente de como pode encontrar a resposta."
 )
 
+# Textos que já foram o prompt padrão em versões anteriores do app. Quem
+# nunca editou o prompt tem um deles gravado no config.json (as Preferências
+# gravavam o texto da caixa ao fechar, mesmo sem alteração); ao carregar, ele
+# é reconhecido como "padrão" e passa a seguir o DEFAULT_SYSTEM_PROMPT atual.
+# Ao mudar o padrão, acrescente aqui o texto antigo, exatamente como era.
+LEGACY_SYSTEM_PROMPTS: tuple = (
+)
+
 # Lista inicial de modelos favoritos exibidos no seletor. O usuário pode
 # atualizar a lista completa do catálogo do OpenRouter pelo menu do app.
 DEFAULT_MODELS: List[str] = [
@@ -49,7 +57,10 @@ DEFAULTS: Dict[str, Any] = {
     "models": DEFAULT_MODELS,
     "site_url": "",
     "site_name": "POR.ai",
-    "system_prompt": DEFAULT_SYSTEM_PROMPT,
+    # None = usar o DEFAULT_SYSTEM_PROMPT da versão instalada. Só fica um
+    # texto gravado aqui quando o usuário personaliza o prompt; assim, mudar
+    # o padrão no código chega a quem nunca o alterou.
+    "system_prompt": None,
     "temperature": 1.0,
     "max_tokens": None,  # None = Automático (calculado por modelo)
     "stream": True,
@@ -108,6 +119,10 @@ class Config:
                 merged = dict(DEFAULTS)
                 merged.update(stored)
                 self._data = merged
+                # Prompt igual a um padrão (atual ou antigo) vira None, para
+                # acompanhar as próximas mudanças do padrão.
+                if self._is_default_prompt(self._data.get("system_prompt")):
+                    self._data["system_prompt"] = None
         except FileNotFoundError:
             logger.info("Config inexistente; usando padrões.")
         except (ValueError, OSError) as exc:
@@ -180,9 +195,33 @@ class Config:
     def site_name(self) -> str:
         return str(self.get("site_name", "")).strip()
 
+    @staticmethod
+    def _is_default_prompt(value: Any) -> bool:
+        """True se ``value`` é None ou o texto de um prompt padrão (atual ou
+        de versões anteriores), ignorando espaços nas pontas."""
+        if value is None:
+            return True
+        text = str(value).strip()
+        return text == DEFAULT_SYSTEM_PROMPT.strip() or any(
+            text == old.strip() for old in LEGACY_SYSTEM_PROMPTS
+        )
+
     @property
     def system_prompt(self) -> str:
-        return str(self.get("system_prompt", DEFAULT_SYSTEM_PROMPT))
+        value = self._data.get("system_prompt")
+        if self._is_default_prompt(value):
+            return DEFAULT_SYSTEM_PROMPT
+        return str(value)
+
+    @system_prompt.setter
+    def system_prompt(self, value: Optional[str]) -> None:
+        # Texto igual ao padrão não é gravado: fica None e acompanha o padrão.
+        # Texto vazio é uma escolha válida (sem prompt) e é mantido.
+        self.set("system_prompt", None if self._is_default_prompt(value) else value)
+
+    @property
+    def system_prompt_is_default(self) -> bool:
+        return self._is_default_prompt(self._data.get("system_prompt"))
 
     @property
     def temperature(self) -> float:
