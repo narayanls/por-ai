@@ -51,11 +51,11 @@ Os passos 2 e 3 aparecem como balões logo depois de você confirmar a chave.
 - **Busca de modelos** — acesso ao catálogo completo do OpenRouter com busca por substring (ex.: digitar `kimi` encontra `moonshotai/kimi`)
 - **Streaming em tempo real** — respostas aparecem sendo escritas, com botão para interromper
 - **Markdown renderizado** — negrito, itálico, código, títulos.
-- **Anexos** — até 4 arquivos por mensagem: PDF, ODT, TXT, MD, ODS, XLSX, CSV, JSON, PY e imagens (PNG, JPG, WebP)
-- **Multimodal** — envie imagens (PNG, JPG, WebP) como entrada para modelos
-  compatíveis analisarem (GPT-4o, Claude, Gemini…)
+- **Anexos** — até 6 arquivos por mensagem: PDF, ODT, TXT, MD, ODS, XLSX, CSV, JSON, PY, TOML, KDL e imagens (PNG, JPG, WebP, SVG)
+- **Multimodal** — envie imagens como entrada para modelos
+  compatíveis analisarem (GPT-4o, Claude, Gemini, etc.)
 - **Pesquisa na web com fontes** — o botão 🌐 ao lado de "Enviar" liga a pesquisa na web do OpenRouter (`openrouter:web_search`) só para a próxima mensagem; as páginas consultadas aparecem numeradas, com link, no fim da resposta. O botão desliga sozinho após cada envio, porque a pesquisa tem custo extra. Funciona com modelos que aceitam ferramentas (tools), ex. Deepseek, Claude, Gemini, Qwen, Zai.
-- **Links clicáveis** — URLs nas respostas são renderizadas como links (imagens e planilhas). As imagens ficam salvas em /home/user/.local/share/por-ai/images e as planilhas em /home/user/.local/share/por-ai/spreadsheets
+- **Links clicáveis** — URLs nas respostas são renderizadas como links (imagens e planilhas). As imagens ficam salvas em `/home/user/.local/share/por-ai/images` e as planilhas em `/home/user/.local/share/por-ai/spreadsheets`
 - **Filtro de privacidade** — escolha se o OpenRouter pode usar qualquer provedor, só os que não treinam com seus prompts, ou só os de retenção zero; neste último caso, a lista de modelos mostra apenas os compatíveis.
 - **Atualização automática do catálogo** — opcional, uma vez a cada 24 horas ao abrir o app
 - **Interface nativa** — GTK4 + Adwaita, integrada ao tema do sistema (modo escuro/claro automático). É possível personalizar escolhendo entre diversos temas como Dracula, Nord, Everforest.
