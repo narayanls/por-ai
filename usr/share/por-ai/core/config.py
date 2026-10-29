@@ -2,7 +2,7 @@
 Gerenciamento de configuração do POR.ai.
 
 A configuração fica em ``~/.config/por-ai/config.json`` (caminho XDG) e guarda
-a chave da API do OpenRouter, o modelo padrão, o prompt de sistema e algumas
+as chaves da API (OpenRouter e Maritaca), o modelo padrão, o prompt de sistema e algumas
 preferências. O arquivo é gravado com permissão 0600 (somente o dono lê/escreve).
 
 
@@ -17,6 +17,8 @@ import stat
 from typing import Any, Dict, List, Optional
 
 from gi.repository import GLib
+
+from core.maritaca import MARITACA_FALLBACK_MODELS, is_maritaca_model, to_app_id
 
 logger = logging.getLogger(__name__)
 
@@ -51,8 +53,17 @@ DEFAULT_MODELS: List[str] = [
     "moonshotai/kimi-k2.6",
 ]
 
+# Modelos da Maritaca exibidos no seletor (quando há chave da Maritaca). Ficam
+# numa lista separada porque "Atualizar modelos do OpenRouter" substitui a
+# lista ``models`` inteira pelo catálogo do OpenRouter.
+DEFAULT_MARITACA_MODELS: List[str] = [to_app_id(m) for m in MARITACA_FALLBACK_MODELS]
+
 DEFAULTS: Dict[str, Any] = {
     "api_key": "",
+    # Chave da API da Maritaca AI (modelos Sabiá). Opcional: o app funciona
+    # com qualquer uma das duas chaves, ou com as duas.
+    "maritaca_api_key": "",
+    "maritaca_models": DEFAULT_MARITACA_MODELS,
     "default_model": "openrouter/auto",
     "models": DEFAULT_MODELS,
     "site_url": "",
@@ -163,8 +174,46 @@ class Config:
         self.set("api_key", (value or "").strip())
 
     @property
+    def maritaca_api_key(self) -> str:
+        return str(self.get("maritaca_api_key", "") or "").strip()
+
+    @maritaca_api_key.setter
+    def maritaca_api_key(self, value: str) -> None:
+        self.set("maritaca_api_key", (value or "").strip())
+
+    @property
+    def has_openrouter_key(self) -> bool:
+        return bool(self.api_key)
+
+    @property
+    def has_maritaca_key(self) -> bool:
+        return bool(self.maritaca_api_key)
+
+    @staticmethod
+    def provider_for_model(model: str) -> str:
+        """"maritaca" ou "openrouter", conforme o prefixo do ID do modelo."""
+        return "maritaca" if is_maritaca_model(model) else "openrouter"
+
+    def api_key_for_model(self, model: str) -> str:
+        """Chave da API que atende ``model`` ("" se ela não foi configurada)."""
+        if self.provider_for_model(model) == "maritaca":
+            return self.maritaca_api_key
+        return self.api_key
+
+    def is_model_available(self, model: str) -> bool:
+        """True se há chave configurada para o provedor do modelo."""
+        return bool(model) and bool(self.api_key_for_model(model))
+
+    @property
     def default_model(self) -> str:
-        return str(self.get("default_model", "")).strip() or "openrouter/auto"
+        """Modelo padrão gravado. Se o provedor dele estiver sem chave (ex.:
+        só a chave da Maritaca foi configurada e o padrão é
+        ``openrouter/auto``), devolve o primeiro modelo disponível."""
+        stored = str(self.get("default_model", "")).strip() or "openrouter/auto"
+        if self.is_model_available(stored):
+            return stored
+        available = self.available_models
+        return available[0] if available else stored
 
     @default_model.setter
     def default_model(self, value: str) -> None:
@@ -186,6 +235,45 @@ class Config:
     @models.setter
     def models(self, value: List[str]) -> None:
         self.set("models", [str(v).strip() for v in value if str(v).strip()])
+
+    @property
+    def maritaca_models(self) -> List[str]:
+        """Modelos da Maritaca, sempre com o prefixo ``maritaca/``."""
+        value = self.get("maritaca_models", DEFAULT_MARITACA_MODELS)
+        if not isinstance(value, list):
+            return list(DEFAULT_MARITACA_MODELS)
+        seen: Dict[str, None] = {}
+        for item in value:
+            item = str(item).strip()
+            if item:
+                seen[to_app_id(item)] = None
+        return list(seen.keys()) or list(DEFAULT_MARITACA_MODELS)
+
+    @maritaca_models.setter
+    def maritaca_models(self, value: List[str]) -> None:
+        self.set(
+            "maritaca_models",
+            [to_app_id(str(v).strip()) for v in value if str(v).strip()],
+        )
+
+    @property
+    def available_models(self) -> List[str]:
+        """Lista do seletor: modelos do OpenRouter (se houver chave) seguidos
+        dos da Maritaca (se houver chave). Sem nenhuma chave, devolve a lista
+        do OpenRouter para o seletor não ficar vazio."""
+        result: List[str] = []
+        if self.has_openrouter_key:
+            # IDs "maritaca/..." digitados na lista do OpenRouter seguem para
+            # a Maritaca; só entram aqui se houver chave dela.
+            result += [m for m in self.models if self.is_model_available(m)]
+        if self.has_maritaca_key:
+            result += self.maritaca_models
+        if not result:
+            return self.models
+        seen: Dict[str, None] = {}
+        for item in result:
+            seen.setdefault(item, None)
+        return list(seen.keys())
 
     @property
     def site_url(self) -> str:
@@ -312,5 +400,5 @@ class Config:
         return last <= 0 or last > now or (now - last) >= AUTO_UPDATE_MODELS_INTERVAL
 
     def is_configured(self) -> bool:
-        """True se há chave da API suficiente para usar o app."""
-        return bool(self.api_key)
+        """True se há pelo menos uma chave (OpenRouter ou Maritaca)."""
+        return self.has_openrouter_key or self.has_maritaca_key
