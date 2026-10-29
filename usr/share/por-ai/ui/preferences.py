@@ -3,8 +3,8 @@ Preferências do POR.ai.
 
 Usa ``Adw.PreferencesWindow`` (estável em todas as versões 1.x da libadwaita).
 As alterações são gravadas na configuração assim que o usuário fecha a janela
-— seja pelo botão "Confirmar" da página OpenRouter, por Enter no campo da
-chave ou pelo botão de fechar da própria janela.
+— seja pelo botão "Confirmar" das páginas OpenRouter e Maritaca, por Enter
+num dos campos de chave ou pelo botão de fechar da própria janela.
 """
 
 from __future__ import annotations
@@ -77,6 +77,7 @@ class PreferencesWindow(Adw.PreferencesWindow):
         self.set_search_enabled(True)
 
         self._build_api_page()
+        self._build_maritaca_page()
         self._build_behavior_page()
 
         # Grava ao fechar.
@@ -85,7 +86,7 @@ class PreferencesWindow(Adw.PreferencesWindow):
         # Sem chave ainda (primeira execução): já deixa o cursor no campo, para
         # colar direto. Feito depois que a janela aparece, senão o foco inicial
         # da própria janela sobrescreve este.
-        if not self.config.api_key:
+        if not self.config.is_configured():
             self.connect("map", lambda *_: GLib.idle_add(self._focus_api_key))
 
     # ------------------------------------------------------------------ #
@@ -102,7 +103,8 @@ class PreferencesWindow(Adw.PreferencesWindow):
         group.set_description(
             "Sua chave fica salva localmente em ~/.config/por-ai/config.json "
             "(permissão 0600). O conteúdo das conversas é enviado ao provedor do "
-            "modelo escolhido através do OpenRouter."
+            "modelo escolhido através do OpenRouter. Opcional se você usar só "
+            "a Maritaca."
         )
 
         self._api_key_row = Adw.PasswordEntryRow()
@@ -191,18 +193,108 @@ class PreferencesWindow(Adw.PreferencesWindow):
 
         self.add(page)
 
+    # ------------------------------------------------------------------ #
+    # Página: Maritaca                                                     #
+    # ------------------------------------------------------------------ #
+
+    def _build_maritaca_page(self) -> None:
+        page = Adw.PreferencesPage()
+        page.set_title("Maritaca")
+        page.set_icon_name("network-server-symbolic")
+
+        group = Adw.PreferencesGroup()
+        group.set_title("Conexão")
+        group.set_description(
+            "Chave da API da Maritaca AI (modelos Sabiá), criada em "
+            "plataforma.maritaca.ai. Fica salva no mesmo arquivo local da "
+            "chave do OpenRouter. As conversas com os modelos maritaca/… vão "
+            "direto para a Maritaca, sem passar pelo OpenRouter. Opcional se "
+            "você usar só o OpenRouter."
+        )
+
+        self._maritaca_key_row = Adw.PasswordEntryRow()
+        self._maritaca_key_row.set_title("Chave da API")
+        self._maritaca_key_row.set_text(self.config.maritaca_api_key)
+        group.add(self._maritaca_key_row)
+
+        self._maritaca_confirm_button = Gtk.Button(label="Confirmar")
+        self._maritaca_confirm_button.add_css_class("suggested-action")
+        self._maritaca_confirm_button.add_css_class("pill")
+        self._maritaca_confirm_button.set_halign(Gtk.Align.CENTER)
+        self._maritaca_confirm_button.set_margin_top(18)
+        self._maritaca_confirm_button.set_tooltip_text("Salvar e fechar as preferências")
+        self._maritaca_confirm_button.connect("clicked", self._on_confirm)
+        group.add(self._maritaca_confirm_button)
+
+        self._maritaca_key_row.connect("changed", self._sync_confirm_button)
+        self._maritaca_key_row.connect("entry-activated", self._on_confirm)
+        self._sync_confirm_button()
+
+        page.add(group)
+
+        models_group = Adw.PreferencesGroup()
+        models_group.set_title("Modelos")
+        models_group.set_description(
+            "Um ID por linha (ex.: sabia-4). O prefixo maritaca/ é acrescentado "
+            "sozinho. Aparecem no seletor quando há chave da Maritaca. O menu ▸ "
+            "Atualizar modelos também atualiza esta lista."
+        )
+
+        self._maritaca_models_view = Gtk.TextView()
+        self._maritaca_models_view.set_monospace(True)
+        self._maritaca_models_view.set_top_margin(8)
+        self._maritaca_models_view.set_bottom_margin(8)
+        self._maritaca_models_view.set_left_margin(8)
+        self._maritaca_models_view.set_right_margin(8)
+        self._maritaca_models_view.get_buffer().set_text(
+            "\n".join(self.config.maritaca_models)
+        )
+
+        scroller = Gtk.ScrolledWindow()
+        scroller.set_min_content_height(100)
+        scroller.set_policy(Gtk.PolicyType.AUTOMATIC, Gtk.PolicyType.AUTOMATIC)
+        scroller.set_child(self._maritaca_models_view)
+        scroller.add_css_class("card")
+        models_group.add(scroller)
+        page.add(models_group)
+
+        notes_group = Adw.PreferencesGroup()
+        notes_group.set_description(
+            "Nos modelos da Maritaca não há pesquisa na web, filtro de "
+            "privacidade, prioridade do provedor nem controle do esforço de "
+            "raciocínio: esses recursos são do OpenRouter."
+        )
+        page.add(notes_group)
+
+        self.add(page)
+
     def _focus_api_key(self) -> bool:
         self._api_key_row.grab_focus()
         return False  # chamado via GLib.idle_add: não reagendar
 
+    def _has_any_key(self) -> bool:
+        return bool(
+            self._api_key_row.get_text().strip()
+            or self._maritaca_key_row.get_text().strip()
+        )
+
     def _sync_confirm_button(self, *_args) -> None:
-        has_key = bool(self._api_key_row.get_text().strip())
+        # Os dois botões "Confirmar" são criados em páginas diferentes; o
+        # sinal "changed" do primeiro campo pode disparar antes de a página
+        # da Maritaca existir.
+        if not hasattr(self, "_maritaca_key_row"):
+            self._confirm_button.set_sensitive(
+                bool(self._api_key_row.get_text().strip())
+            )
+            return
+        has_key = self._has_any_key()
         self._confirm_button.set_sensitive(has_key)
+        self._maritaca_confirm_button.set_sensitive(has_key)
 
     def _on_confirm(self, *_args) -> None:
         """Salva e fecha. A gravação em si acontece em _on_close, disparado
         pelo close-request — o mesmo caminho do botão de fechar da janela."""
-        if self._api_key_row.get_text().strip():
+        if self._has_any_key():
             self.close()
 
     # ------------------------------------------------------------------ #
@@ -318,7 +410,7 @@ class PreferencesWindow(Adw.PreferencesWindow):
         group.set_description(
             "Modelos que “pensam” antes de responder ficam mais lentos quanto "
             "maior o esforço. O tempo gasto em cada etapa aparece no chat. "
-            
+            "Estas duas opções valem só para os modelos do OpenRouter."
         )
 
         self._reasoning_row = self._make_combo_row(
@@ -379,6 +471,7 @@ class PreferencesWindow(Adw.PreferencesWindow):
 
     def _on_close(self, *_args) -> bool:
         self.config.api_key = self._api_key_row.get_text()
+        self.config.maritaca_api_key = self._maritaca_key_row.get_text()
         self.config.set("site_name", self._site_name_row.get_text().strip())
         #self.config.set("site_url", self._site_url_row.get_text().strip())
         self.config.set("stream", self._stream_row.get_active())
@@ -402,8 +495,21 @@ class PreferencesWindow(Adw.PreferencesWindow):
         models = [line.strip() for line in models_text.splitlines() if line.strip()]
         if models:
             self.config.models = models
-            if self.config.default_model not in models:
-                self.config.default_model = models[0]
+
+        maritaca_text = self._buffer_text(self._maritaca_models_view)
+        maritaca_models = [
+            line.strip() for line in maritaca_text.splitlines() if line.strip()
+        ]
+        if maritaca_models:
+            self.config.maritaca_models = maritaca_models
+
+        # O padrão precisa estar entre os modelos que o seletor mostra (os
+        # do OpenRouter e os da Maritaca, conforme as chaves configuradas).
+        # Lê o valor gravado, não a property, que já corrige sozinha.
+        available = self.config.available_models
+        stored_default = str(self.config.get("default_model", "") or "").strip()
+        if available and stored_default not in available:
+            self.config.default_model = available[0]
 
         self.config.save()
         if self._on_saved is not None:

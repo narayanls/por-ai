@@ -1,6 +1,10 @@
 """
 Cliente do OpenRouter para o POR.ai.
 
+Também serve de base para outros provedores compatíveis com a API da OpenAI
+(``/chat/completions`` com SSE): basta uma subclasse trocar ``BASE_URL`` e
+companhia — ver ``core/maritaca.py``.
+
 O padrão de cabeçalhos segue o recomendado pelo OpenRouter:
 ``Authorization: Bearer <chave>`` e, opcionalmente, ``HTTP-Referer`` (site_url)
 e ``X-Title`` (site_name) para aparecer nas estatísticas da sua conta.
@@ -57,6 +61,17 @@ class OpenRouterError(RuntimeError):
 
 
 class OpenRouterClient:
+    # Pontos de personalização para outros provedores compatíveis com a API
+    # da OpenAI (ver ``core/maritaca.py``). Uma subclasse só precisa trocar
+    # estes atributos e, se quiser, ``_extra_payload``.
+    BASE_URL = OPENROUTER_BASE
+    PROVIDER_NAME = "OpenRouter"
+    MODELS_PATH = "/models/user"
+    MISSING_KEY_MESSAGE = "Configure a chave da API OpenRouter em Preferências."
+    # ``stream_options.include_usage`` faz parte da API da OpenAI e devolve o
+    # uso de tokens no último pedaço do streaming.
+    STREAM_INCLUDE_USAGE = True
+
     def __init__(
         self,
         api_key: str,
@@ -79,7 +94,7 @@ class OpenRouterClient:
 
     def _headers(self) -> Dict[str, str]:
         if not self.api_key:
-            raise OpenRouterError("Configure a chave da API OpenRouter em Preferências.")
+            raise OpenRouterError(self.MISSING_KEY_MESSAGE)
         headers = {
             "Content-Type": "application/json",
             "Authorization": f"Bearer {self.api_key}",
@@ -99,7 +114,7 @@ class OpenRouterClient:
 
         ``timeout`` permite um limite menor que o do chat (o catálogo fica
         no caminho da primeira mensagem, então não pode esperar 240 s)."""
-        return self._get_data_list("/models/user", timeout)
+        return self._get_data_list(self.MODELS_PATH, timeout)
 
     def list_zdr_model_ids(self, timeout: Optional[float] = None) -> Set[str]:
         """IDs dos modelos com pelo menos um endpoint de retenção zero (ZDR).
@@ -123,24 +138,24 @@ class OpenRouterClient:
     def _get_data_list(
         self, path: str, timeout: Optional[float] = None
     ) -> List[Dict[str, Any]]:
-        """GET em ``OPENROUTER_BASE + path`` e devolve o campo ``data``."""
-        url = f"{OPENROUTER_BASE}{path}"
+        """GET em ``BASE_URL + path`` e devolve o campo ``data``."""
+        url = f"{self.BASE_URL}{path}"
         try:
             response = requests.get(
                 url, headers=self._headers(), timeout=timeout or self.timeout
             )
         except requests.Timeout as exc:
             raise OpenRouterError(
-                f"Tempo de espera esgotado ao contatar OpenRouter: {exc}", retryable=True
+                f"Tempo de espera esgotado ao contatar {self.PROVIDER_NAME}: {exc}", retryable=True
             ) from exc
         except requests.ConnectionError as exc:
             raise OpenRouterError(
-                f"Falha de conexão com OpenRouter: {exc}", retryable=True
+                f"Falha de conexão com {self.PROVIDER_NAME}: {exc}", retryable=True
             ) from exc
         except requests.RequestException as exc:
-            raise OpenRouterError(f"Falha ao contatar OpenRouter: {exc}") from exc
+            raise OpenRouterError(f"Falha ao contatar {self.PROVIDER_NAME}: {exc}") from exc
 
-        # O OpenRouter responde em UTF-8; fixamos para o requests não assumir
+        # As APIs respondem em UTF-8; fixamos para o requests não assumir
         # ISO-8859-1 e gerar acentuação corrompida ("Ã§" no lugar de "ç").
         response.encoding = "utf-8"
 
@@ -149,7 +164,7 @@ class OpenRouterClient:
         try:
             payload = response.json()
         except ValueError as exc:
-            raise OpenRouterError("OpenRouter retornou JSON inválido.") from exc
+            raise OpenRouterError(f"{self.PROVIDER_NAME} retornou JSON inválido.") from exc
 
         data = payload.get("data") if isinstance(payload, dict) else None
         return data if isinstance(data, list) else []
@@ -167,12 +182,12 @@ class OpenRouterClient:
         """Retorna (texto, urls_de_imagem, usage, reasoning). ``reasoning``
         é o raciocínio interno que alguns modelos expõem separado do
         conteúdo final; vem vazio para modelos que não o expõem."""
-        url = f"{OPENROUTER_BASE}/chat/completions"
+        url = f"{self.BASE_URL}/chat/completions"
         payload: Dict[str, Any] = {
             "model": model,
             "messages": self._normalise_messages(messages),
-            "usage": {"include": True},
         }
+        payload.update(self._extra_payload())
         payload.update(self._clean_params(params))
         self.last_citations = []
 
@@ -183,14 +198,14 @@ class OpenRouterClient:
             )
         except requests.Timeout as exc:
             raise OpenRouterError(
-                f"Tempo de espera esgotado ao contatar OpenRouter: {exc}", retryable=True
+                f"Tempo de espera esgotado ao contatar {self.PROVIDER_NAME}: {exc}", retryable=True
             ) from exc
         except requests.ConnectionError as exc:
             raise OpenRouterError(
-                f"Falha de conexão com OpenRouter: {exc}", retryable=True
+                f"Falha de conexão com {self.PROVIDER_NAME}: {exc}", retryable=True
             ) from exc
         except requests.RequestException as exc:
-            raise OpenRouterError(f"Falha ao contatar OpenRouter: {exc}") from exc
+            raise OpenRouterError(f"Falha ao contatar {self.PROVIDER_NAME}: {exc}") from exc
 
         response.encoding = "utf-8"
 
@@ -199,7 +214,7 @@ class OpenRouterClient:
         try:
             data = response.json()
         except ValueError as exc:
-            raise OpenRouterError("OpenRouter retornou JSON inválido.") from exc
+            raise OpenRouterError(f"{self.PROVIDER_NAME} retornou JSON inválido.") from exc
 
         choices = data.get("choices") or []
         if not choices:
@@ -269,14 +284,15 @@ class OpenRouterClient:
         ``should_cancel`` é uma função opcional; se retornar True, o stream é
         interrompido e a conexão fechada.
         """
-        url = f"{OPENROUTER_BASE}/chat/completions"
+        url = f"{self.BASE_URL}/chat/completions"
         payload: Dict[str, Any] = {
             "model": model,
             "messages": self._normalise_messages(messages),
             "stream": True,
-            "stream_options": {"include_usage": True},
-            "usage": {"include": True},
         }
+        if self.STREAM_INCLUDE_USAGE:
+            payload["stream_options"] = {"include_usage": True}
+        payload.update(self._extra_payload())
         payload.update(self._clean_params(params))
         self.last_citations = []
 
@@ -365,14 +381,14 @@ class OpenRouterClient:
                         collected_images.extend(delta_images)
         except requests.Timeout as exc:
             raise OpenRouterError(
-                f"Tempo de espera esgotado ao contatar OpenRouter: {exc}", retryable=True
+                f"Tempo de espera esgotado ao contatar {self.PROVIDER_NAME}: {exc}", retryable=True
             ) from exc
         except requests.ConnectionError as exc:
             raise OpenRouterError(
-                f"Falha de conexão com OpenRouter: {exc}", retryable=True
+                f"Falha de conexão com {self.PROVIDER_NAME}: {exc}", retryable=True
             ) from exc
         except requests.RequestException as exc:
-            raise OpenRouterError(f"Falha ao contatar OpenRouter: {exc}") from exc
+            raise OpenRouterError(f"Falha ao contatar {self.PROVIDER_NAME}: {exc}") from exc
 
         timing["total"] = time.monotonic() - started
         self._debug_log(model, finish_reason, usage, timing=timing, provider=provider)
@@ -408,6 +424,12 @@ class OpenRouterClient:
     # ------------------------------------------------------------------ #
     # Auxiliares                                                           #
     # ------------------------------------------------------------------ #
+
+    def _extra_payload(self) -> Dict[str, Any]:
+        """Campos extras que só este provedor entende. No OpenRouter,
+        ``usage.include`` pede o custo detalhado de cada resposta; outros
+        provedores podem rejeitar o campo, então a subclasse devolve ``{}``."""
+        return {"usage": {"include": True}}
 
     @staticmethod
     def _extract_images(images_field: Any) -> List[str]:
@@ -616,31 +638,40 @@ class OpenRouterClient:
     # inexistente etc.) são definitivos: tentar de novo não muda o resultado.
     _RETRYABLE_STATUS_CODES = {408, 425, 429, 500, 502, 503, 504}
 
-    @staticmethod
-    def _raise_for_status(response: requests.Response) -> None:
+    @classmethod
+    def _raise_for_status(cls, response: requests.Response) -> None:
         if response.status_code < 400:
             return
-        message = OpenRouterClient._format_error(response)
-        retryable = response.status_code in OpenRouterClient._RETRYABLE_STATUS_CODES
+        message = cls._format_error(response)
+        retryable = response.status_code in cls._RETRYABLE_STATUS_CODES
         raise OpenRouterError(message, retryable=retryable)
 
-    @staticmethod
-    def _format_error(response: requests.Response) -> str:
+    @classmethod
+    def _format_error(cls, response: requests.Response) -> str:
+        name = cls.PROVIDER_NAME
         status = response.status_code
         fallback = (response.text or "").strip() or "Erro desconhecido."
         try:
             payload = response.json()
         except ValueError:
-            return f"OpenRouter respondeu HTTP {status}: {fallback}"
+            return f"{name} respondeu HTTP {status}: {fallback}"
 
-        error_obj = payload.get("error")
+        error_obj = payload.get("error") if isinstance(payload, dict) else None
+        if isinstance(error_obj, str):
+            error_obj = {"message": error_obj}
+        if not isinstance(error_obj, dict) and isinstance(payload, dict):
+            detail = payload.get("detail") or payload.get("message")
+            if detail:
+                error_obj = {"message": detail if isinstance(detail, str) else json.dumps(detail, ensure_ascii=False)}
         if not isinstance(error_obj, dict):
-            return f"OpenRouter respondeu HTTP {status}: {fallback}"
+            return f"{name} respondeu HTTP {status}: {fallback}"
 
+        # Formato OpenAI/OpenRouter: {"error": {"message": ...}}. Algumas APIs
+        # devolvem só {"detail": ...} ou {"message": ...}; aceitamos também.
         message = error_obj.get("message") or fallback
         metadata = error_obj.get("metadata") or {}
         provider_name = metadata.get("provider_name")
         raw_detail = metadata.get("raw")
         details = [str(d) for d in (provider_name, raw_detail) if d]
         suffix = f" ({' | '.join(details)})" if details else ""
-        return f"OpenRouter respondeu HTTP {status}: {message}{suffix}"
+        return f"{name} respondeu HTTP {status}: {message}{suffix}"

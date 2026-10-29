@@ -36,6 +36,7 @@ from typing import Any, Callable, Dict, List, Optional, Tuple
 from gi.repository import GLib
 
 from core.config import Config
+from core.maritaca import MaritacaClient, is_maritaca_model
 from core.openrouter import OpenRouterClient, OpenRouterError, web_search_tool
 
 # ── Dependências opcionais ────────────────────────────────────────────────────
@@ -106,7 +107,11 @@ logger = logging.getLogger(__name__)
 
 
 class ChatAssistant:
-    """Envia conversas ao OpenRouter sem travar a interface."""
+    """Envia conversas ao OpenRouter ou à Maritaca sem travar a interface.
+
+    O provedor é escolhido pelo ID do modelo: ``maritaca/...`` vai para a
+    Maritaca; todo o resto, para o OpenRouter (ver ``_build_client``).
+    """
 
     # Tempo de vida do cache do catálogo de modelos (evita bater na API do
     # OpenRouter a cada mensagem só pra saber a janela de contexto).
@@ -131,9 +136,11 @@ class ChatAssistant:
         self._lock = threading.RLock()
         self._inflight = False
         self._cancel = threading.Event()
-        self._model_cache: Dict[str, Dict[str, Any]] = {}
-        self._model_cache_time: float = 0.0
-        self._model_cache_failed_at: float = 0.0
+        # Um catálogo por provedor ("openrouter" / "maritaca"): os IDs e os
+        # metadados vêm de APIs diferentes e expiram de forma independente.
+        self._model_cache: Dict[str, Dict[str, Dict[str, Any]]] = {}
+        self._model_cache_time: Dict[str, float] = {}
+        self._model_cache_failed_at: Dict[str, float] = {}
         self._model_cache_lock = threading.Lock()
 
     # ------------------------------------------------------------------ #
@@ -183,12 +190,23 @@ class ChatAssistant:
         result.insert(0, {"role": "system", "content": addendum})
         return result
 
-    def _build_client(self) -> OpenRouterClient:
+    def _build_client(self, model: Optional[str] = None) -> OpenRouterClient:
+        """Cliente do provedor que atende ``model``. Sem modelo, devolve o
+        do OpenRouter (comportamento antigo)."""
+        if model and is_maritaca_model(model):
+            return self._build_maritaca_client()
         return OpenRouterClient(
             api_key=self.config.api_key,
             site_url=self.config.site_url,
             site_name=self.config.site_name,
         )
+
+    def _build_maritaca_client(self) -> MaritacaClient:
+        return MaritacaClient(api_key=self.config.maritaca_api_key)
+
+    @staticmethod
+    def _provider_of(client: OpenRouterClient) -> str:
+        return "maritaca" if isinstance(client, MaritacaClient) else "openrouter"
 
     @staticmethod
     def _is_image_model(model: str) -> bool:
@@ -225,32 +243,34 @@ class ChatAssistant:
     def _get_model_entry(
         self, client: OpenRouterClient, model: str
     ) -> Optional[Dict[str, Any]]:
-        """Retorna a entrada crua do catálogo do OpenRouter pro modelo, usando
-        um cache de até 1h pra não bater na API a cada envio. Se a consulta
-        falhar (sem rede, chave inválida etc.), devolve None."""
+        """Retorna a entrada crua do catálogo do provedor do ``client`` pro
+        modelo, usando um cache de até 1h pra não bater na API a cada envio.
+        Se a consulta falhar (sem rede, chave inválida etc.), devolve None."""
+        provider = self._provider_of(client)
         with self._model_cache_lock:
             now = time.monotonic()
-            expired = (now - self._model_cache_time) > self._MODEL_CACHE_TTL
-            recently_failed = (
-                self._model_cache_failed_at
-                and (now - self._model_cache_failed_at) < self._MODEL_CACHE_RETRY_AFTER
-            )
-            if (expired or not self._model_cache) and not recently_failed:
+            cached = self._model_cache.get(provider) or {}
+            cached_at = self._model_cache_time.get(provider, 0.0)
+            failed_at = self._model_cache_failed_at.get(provider, 0.0)
+            expired = (now - cached_at) > self._MODEL_CACHE_TTL
+            recently_failed = failed_at and (now - failed_at) < self._MODEL_CACHE_RETRY_AFTER
+            if (expired or not cached) and not recently_failed:
                 try:
                     raw = client.list_models(timeout=self._MODEL_CATALOG_TIMEOUT)
                 except OpenRouterError as exc:
-                    logger.info("Catálogo de modelos indisponível: %s", exc)
+                    logger.info("Catálogo de modelos (%s) indisponível: %s", provider, exc)
                     raw = None
-                    self._model_cache_failed_at = time.monotonic()
+                    self._model_cache_failed_at[provider] = time.monotonic()
                 if raw is not None:
-                    self._model_cache_failed_at = 0.0
+                    self._model_cache_failed_at[provider] = 0.0
                     cache: Dict[str, Dict[str, Any]] = {}
                     for entry in raw:
                         if isinstance(entry, dict) and entry.get("id"):
                             cache[str(entry["id"])] = entry
-                    self._model_cache = cache
-                    self._model_cache_time = time.monotonic()
-            return self._model_cache.get(model)
+                    self._model_cache[provider] = cache
+                    self._model_cache_time[provider] = time.monotonic()
+                    cached = cache
+            return cached.get(model)
 
     def prewarm_model_cache(self) -> None:
         """Baixa o catálogo de modelos em segundo plano.
@@ -263,11 +283,18 @@ class ChatAssistant:
         if not self.config.is_configured():
             return
 
+        clients: List[OpenRouterClient] = []
+        if self.config.has_openrouter_key:
+            clients.append(self._build_client())
+        if self.config.has_maritaca_key:
+            clients.append(self._build_maritaca_client())
+
         def worker() -> None:
-            try:
-                self._get_model_entry(self._build_client(), "")
-            except Exception:  # pylint: disable=broad-except
-                logger.debug("Pré-carregamento do catálogo falhou", exc_info=True)
+            for client in clients:
+                try:
+                    self._get_model_entry(client, "")
+                except Exception:  # pylint: disable=broad-except
+                    logger.debug("Pré-carregamento do catálogo falhou", exc_info=True)
 
         threading.Thread(target=worker, daemon=True).start()
 
@@ -341,11 +368,12 @@ class ChatAssistant:
             provider["zdr"] = True
         return provider or None
 
-    def _explain_privacy_error(self, message: str) -> str:
+    def _explain_privacy_error(self, message: str, model: str = "") -> str:
         """Com o filtro de privacidade ligado, modelos sem nenhum provedor
         compatível falham com um erro genérico ("No endpoints found…").
-        Acrescenta a causa provável para o usuário não ficar sem pista."""
-        if not self.config.privacy_filter:
+        Acrescenta a causa provável para o usuário não ficar sem pista.
+        O filtro é do OpenRouter; não se aplica aos modelos da Maritaca."""
+        if not self.config.privacy_filter or is_maritaca_model(model):
             return message
         lowered = message.lower()
         if "endpoint" not in lowered and "data policy" not in lowered:
@@ -564,11 +592,30 @@ class ChatAssistant:
         web_search: bool = False,
     ) -> None:
         try:
-            client = self._build_client()
+            maritaca = is_maritaca_model(model)
+            if maritaca and not self.config.has_maritaca_key:
+                raise OpenRouterError(
+                    "Configure a chave da API da Maritaca em Preferências para "
+                    f"usar o modelo {model}."
+                )
+            if not maritaca and not self.config.has_openrouter_key:
+                raise OpenRouterError(
+                    "Configure a chave da API do OpenRouter em Preferências para "
+                    f"usar o modelo {model}."
+                )
+            client = self._build_client(model)
             messages = self._inject_capabilities(messages)
             extra: Dict[str, Any] = {}
 
             if web_search:
+                if maritaca:
+                    # A pesquisa é uma server tool do OpenRouter; a API da
+                    # Maritaca não a executa.
+                    raise OpenRouterError(
+                        "A pesquisa na web só está disponível nos modelos do "
+                        "OpenRouter. Desative o botão de pesquisa ou escolha "
+                        "outro modelo."
+                    )
                 if self._is_image_model(model):
                     # Modelos de imagem não usam ferramentas; a busca seria
                     # ignorada ou recusada pelo provedor.
@@ -588,7 +635,12 @@ class ChatAssistant:
             if self._wants_cache_control(model):
                 extra["cache_control"] = dict(self._CACHE_CONTROL)
 
-            if self._is_image_model(model):
+            if maritaca:
+                # A Maritaca recebe só parâmetros padrão da API da OpenAI
+                # (temperature, max_tokens). ``reasoning`` e ``provider`` são
+                # extensões do OpenRouter e ficam de fora.
+                max_tokens = self._resolve_max_tokens(client, model, messages)
+            elif self._is_image_model(model):
                 extra["modalities"] = ["image", "text"]
                 # Não força max_tokens pra modelos de imagem: o valor
                 # configurado em Preferências é pensado pra respostas de
@@ -610,9 +662,11 @@ class ChatAssistant:
                 if reasoning:
                     extra["reasoning"] = reasoning
 
-            provider = self._build_provider_param(
-                self.config.provider_sort, self.config.privacy_filter
-            )
+            provider = None
+            if not maritaca:
+                provider = self._build_provider_param(
+                    self.config.provider_sort, self.config.privacy_filter
+                )
             if provider:
                 extra["provider"] = provider
 
@@ -725,7 +779,7 @@ class ChatAssistant:
 
             GLib.idle_add(on_done, display, full, sources)
         except OpenRouterError as exc:
-            GLib.idle_add(on_error, self._explain_privacy_error(str(exc)))
+            GLib.idle_add(on_error, self._explain_privacy_error(str(exc), model))
         except Exception as exc:  # pylint: disable=broad-except
             logger.exception("Erro inesperado no chat")
             GLib.idle_add(on_error, str(exc))
@@ -742,27 +796,70 @@ class ChatAssistant:
         on_done: Callable[[List[str]], None],
         on_error: Callable[[str], None],
     ) -> None:
+        """Atualiza os catálogos dos provedores com chave configurada.
+
+        ``on_done`` recebe só os IDs do OpenRouter (a janela grava em
+        ``config.models``). Os da Maritaca vão direto para
+        ``config.maritaca_models`` antes de ``on_done`` ser chamado. Sem
+        chave do OpenRouter, ``on_done`` recebe a lista atual, sem mudança.
+        Se só um dos provedores falhar, o outro é atualizado mesmo assim.
+        """
+        has_openrouter = self.config.has_openrouter_key
+        has_maritaca = self.config.has_maritaca_key
+
         def worker() -> None:
-            try:
-                client = self._build_client()
-                raw = client.list_models()
-                ids = sorted(
-                    {
-                        str(item.get("id")).strip()
-                        for item in raw
-                        if isinstance(item, dict) and item.get("id")
-                    }
-                )
-                if self.config.privacy_filter == "zdr":
-                    ids = self._keep_zdr_models(client, ids)
-                GLib.idle_add(on_done, ids)
-            except OpenRouterError as exc:
-                GLib.idle_add(on_error, str(exc))
-            except Exception as exc:  # pylint: disable=broad-except
-                logger.exception("Erro ao buscar modelos")
-                GLib.idle_add(on_error, str(exc))
+            openrouter_ids: Optional[List[str]] = None
+            maritaca_ids: Optional[List[str]] = None
+            errors: List[str] = []
+
+            if has_openrouter:
+                try:
+                    client = self._build_client()
+                    openrouter_ids = self._ids_from(client.list_models())
+                    if self.config.privacy_filter == "zdr":
+                        openrouter_ids = self._keep_zdr_models(client, openrouter_ids)
+                except OpenRouterError as exc:
+                    errors.append(str(exc))
+                except Exception as exc:  # pylint: disable=broad-except
+                    logger.exception("Erro ao buscar modelos do OpenRouter")
+                    errors.append(str(exc))
+
+            if has_maritaca:
+                try:
+                    maritaca_ids = self._ids_from(self._build_maritaca_client().list_models())
+                except OpenRouterError as exc:
+                    errors.append(str(exc))
+                except Exception as exc:  # pylint: disable=broad-except
+                    logger.exception("Erro ao buscar modelos da Maritaca")
+                    errors.append(f"Maritaca: {exc}")
+
+            if openrouter_ids is None and maritaca_ids is None:
+                GLib.idle_add(on_error, "\n".join(errors) or "Nenhum provedor configurado.")
+                return
+            for message in errors:
+                logger.warning("Atualização parcial do catálogo: %s", message)
+
+            def finish() -> bool:
+                # Roda na thread da interface: é seguro mexer na config aqui.
+                if maritaca_ids:
+                    self.config.maritaca_models = maritaca_ids
+                ids = openrouter_ids if openrouter_ids is not None else self.config.models
+                on_done(ids)
+                return False
+
+            GLib.idle_add(finish)
 
         threading.Thread(target=worker, daemon=True).start()
+
+    @staticmethod
+    def _ids_from(raw: List[Dict[str, Any]]) -> List[str]:
+        return sorted(
+            {
+                str(item.get("id")).strip()
+                for item in raw
+                if isinstance(item, dict) and item.get("id")
+            }
+        )
 
     # O roteador automático não é um modelo com provedores próprios (ele
     # escolhe um modelo na hora do envio), então não aparece na lista ZDR.

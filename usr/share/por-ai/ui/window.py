@@ -7,7 +7,7 @@ linha), botão de anexar arquivo e botão enviar/parar.
 
 A privacidade aqui significa: o app é seu, roda localmente e não loga suas
 conversas em servidores de terceiros além do próprio OpenRouter (que encaminha
-ao provedor do modelo). O conteúdo de arquivos anexados é incluído na mensagem
+ao provedor do modelo) ou da Maritaca, quando o modelo escolhido é um Sabiá. O conteúdo de arquivos anexados é incluído na mensagem
 enviada ao modelo — fica claro na interface quando isso acontece.
 """
 
@@ -48,6 +48,7 @@ except (ValueError, ImportError):
 
 from core.assistant import ChatAssistant
 from core.config import Config
+from core.maritaca import is_maritaca_model, to_api_id
 from core.storage import ConversationStore
 from ui.message_row import MessageRow
 from ui.preferences import PreferencesWindow
@@ -283,7 +284,9 @@ class PorAiWindow(Adw.ApplicationWindow):
         # Seletor de modelo: MenuButton + Popover próprio com SearchEntry e
         # ListBox. Controle total — sem estados internos do DropDown causando
         # seleções automáticas durante a digitação.
-        self._model_list: List[str] = list(self.config.models)
+        # available_models junta os modelos do OpenRouter e os da Maritaca,
+        # conforme as chaves configuradas (ver Config.available_models).
+        self._model_list: List[str] = list(self.config.available_models)
         self._selected_model_id: Optional[str] = self.config.default_model
 
         self._model_button = Gtk.MenuButton()
@@ -304,7 +307,7 @@ class PorAiWindow(Adw.ApplicationWindow):
         # Menu principal.
         menu = Gio.Menu()
         menu.append("Nova conversa", "win.new-chat")
-        menu.append("Atualizar modelos do OpenRouter", "win.refresh-models")
+        menu.append("Atualizar modelos", "win.refresh-models")
         menu.append("Preferências", "win.preferences")
         menu.append("Temas", "win.color-scheme")
         menu.append("Sobre o POR.ai", "win.about")
@@ -560,8 +563,25 @@ class PorAiWindow(Adw.ApplicationWindow):
 
     def _update_web_search_button(self) -> None:
         """Destaca o botão (cor de destaque) enquanto a pesquisa estiver
-        ligada, para não passar despercebido antes de enviar."""
+        ligada, para não passar despercebido antes de enviar.
+
+        A pesquisa é executada pelo OpenRouter; com um modelo da Maritaca o
+        botão fica desligado e desativado."""
+        if not hasattr(self, "_web_search_button"):
+            return  # ainda montando a interface
         button = self._web_search_button
+        if is_maritaca_model(self._current_model()):
+            if button.get_active():
+                button.set_active(False)  # dispara "toggled" e volta aqui
+                return
+            button.remove_css_class("suggested-action")
+            button.add_css_class("flat")
+            button.set_sensitive(False)
+            button.set_tooltip_text(
+                "A pesquisa na web só está disponível nos modelos do OpenRouter."
+            )
+            return
+        button.set_sensitive(True)
         if button.get_active():
             button.remove_css_class("flat")
             button.add_css_class("suggested-action")
@@ -788,7 +808,7 @@ class PorAiWindow(Adw.ApplicationWindow):
         status.set_icon_name("user-available-symbolic")
         status.set_title("POR.ai")
         status.set_description(
-            "Chat privado com modelos do OpenRouter.\n"
+            "Chat privado com modelos do OpenRouter e da Maritaca.\n"
             "Digite uma mensagem ou anexe um arquivo para análise."
         )
         status.set_vexpand(True)
@@ -920,6 +940,7 @@ class PorAiWindow(Adw.ApplicationWindow):
             self._model_button.set_label(self._short_model_label(model_id))
             self.config.default_model = model_id
             self.config.save()
+            self._update_web_search_button()
         # fecha pelo MenuButton
         GLib.idle_add(self._dismiss_model_popover)
 
@@ -940,9 +961,12 @@ class PorAiWindow(Adw.ApplicationWindow):
 
     @staticmethod
     def _short_model_label(model_id: Optional[str]) -> str:
-        """Mostra só a parte após a '/' para não sobrecarregar o header."""
+        """Mostra só a parte após a '/' para não sobrecarregar o header.
+        Nos modelos da Maritaca, o provedor vai entre parênteses."""
         if not model_id:
             return "Selecionar modelo"
+        if is_maritaca_model(model_id):
+            return f"{to_api_id(model_id)} (Maritaca)"
         parts = model_id.split("/", 1)
         return parts[1] if len(parts) == 2 else model_id
 
@@ -954,6 +978,7 @@ class PorAiWindow(Adw.ApplicationWindow):
         # Garante que o modelo esteja na lista.
         if model_id not in self._model_list:
             self._model_list.insert(0, model_id)
+        self._update_web_search_button()
 
     def _current_model(self) -> str:
         return self._selected_model_id or self.config.default_model
@@ -1024,7 +1049,10 @@ class PorAiWindow(Adw.ApplicationWindow):
 
         # Pesquisa na web: vale só para este envio (o botão é desligado
         # logo abaixo, assim que o pedido sai).
-        web_search = self._web_search_button.get_active()
+        web_search = (
+            self._web_search_button.get_active()
+            and not is_maritaca_model(self._current_model())
+        )
 
         # Monta o conteúdo enviado à API (texto + arquivos, se houver).
         api_content: Any = text
@@ -2247,20 +2275,23 @@ class PorAiWindow(Adw.ApplicationWindow):
                     self._toast("Nenhum modelo retornado.")
             return False
         current = self._current_model()
+        # model_ids são só os do OpenRouter; os da Maritaca já foram gravados
+        # em config.maritaca_models pelo ChatAssistant.fetch_models.
         self.config.models = model_ids
         # Vale para a atualização manual também: quem acabou de atualizar
         # pelo menu não precisa de outra automática nas próximas 24h.
         self.config.set("models_updated_at", int(time.time()))
         self.config.save()
-        self._model_list = list(model_ids)
-        self._select_model(current if current in model_ids else model_ids[0])
+        available = self.config.available_models
+        self._model_list = list(available)
+        self._select_model(current if current in available else available[0])
         suffix = " com retenção zero" if self.config.privacy_filter == "zdr" else ""
         if automatic:
             self._toast(
-                f"Catálogo atualizado automaticamente: {len(model_ids)} modelos{suffix}."
+                f"Catálogo atualizado automaticamente: {len(available)} modelos{suffix}."
             )
         else:
-            self._toast(f"{len(model_ids)} modelos disponíveis{suffix}.")
+            self._toast(f"{len(available)} modelos disponíveis{suffix}.")
         # Primeira vez com o catálogo carregado: apresenta o menu e o seletor.
         GLib.timeout_add(600, self._maybe_show_tour)
         return False
@@ -2358,9 +2389,12 @@ class PorAiWindow(Adw.ApplicationWindow):
 
         Chamado via GLib.timeout_add, então retorna False para não repetir.
         """
+        # O filtro de privacidade e o catálogo do balão 1+2 são do OpenRouter;
+        # quem usa só a Maritaca já tem os modelos e não precisa do guia. Se
+        # a chave do OpenRouter for configurada depois, o guia aparece então.
         if (
             self._hint is None
-            and self.config.is_configured()
+            and self.config.has_openrouter_key
             and not self.config.get(self._MODELS_HINT_KEY, False)
             and self._menu_button.get_mapped()
         ):
@@ -2568,13 +2602,15 @@ class PorAiWindow(Adw.ApplicationWindow):
         ser reagendado; também é chamado diretamente ao tentar enviar uma
         mensagem sem chave configurada (ver _on_send_clicked).
         """
-        self._toast("Configure sua chave da API do OpenRouter para começar.")
+        self._toast(
+            "Configure sua chave da API do OpenRouter ou da Maritaca para começar."
+        )
         self._on_preferences()
         return False
 
     def _on_prefs_saved(self) -> None:
         current = self._current_model()
-        models = self.config.models
+        models = self.config.available_models
         self._model_list = list(models)
         self._select_model(current if current in models else self.config.default_model)
         # Aplica imediatamente a mudança da preferência de bandeja.
@@ -2594,7 +2630,8 @@ class PorAiWindow(Adw.ApplicationWindow):
             version=APP_VERSION,
             developer_name="Narayan L. Silva - feito com Claude Sonnet",
             comments=(
-                "Personal Own Router AI — um chat com modelos do OpenRouter, "
+                "Personal Own Router AI — um chat com modelos do OpenRouter e "
+                "da Maritaca, "
                 "rodando localmente para manter o controle dos seus arquivos."
             ),
             license_type=Gtk.License.GPL_3_0,
