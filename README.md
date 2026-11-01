@@ -35,6 +35,8 @@ Você precisa de pelo menos uma chave de API para usar este aplicativo. Pode usa
 - **OpenRouter** — acesse o site clicando [aqui.](https://openrouter.ai) Existem **modelos PAGOS** e gratuitos, a maior parte é pago. Adicione saldo no site do OpenRouter ou pesquise por modelos grátis.
 - **Maritaca AI** — empresa brasileira, criadora dos modelos **Sabiá**, treinados com foco no português. Crie a chave na [plataforma da Maritaca](https://plataforma.maritaca.ai). Os modelos são **pagos**, com preços em reais; veja a [tabela de preços](https://docs.maritaca.ai/pt/precos).
 
+Você precisa criar uma chave de API no site do OpenRouter para usar este aplicativo. Acesse o site clicando [aqui.](https://openrouter.ai) Existem **modelos PAGOS** e gratuitos, a maior parte é pago. Adicione saldo no site do OpenRouter ou pesquise por "free" para achar modelos grátis.
+
 ## 🚀 Primeiro uso
 
 1. Abra o **Menu ▸ Preferências** e **cole sua chave da API**:
@@ -129,9 +131,28 @@ O POR.ai roda no seu computador, mas depende da conexão com a internet — sem 
 
 O conteúdo das mensagens e arquivos anexados é enviado ao **OpenRouter**, que os encaminha ao provedor do modelo escolhido. Cada provedor tem sua política de dados, indicada no site do OpenRouter por um escudo: **verde** não retém as conversas nem as usa para treinar IAs; **amarelo** pode reter, mas não treina com elas; **vermelho** retém e treina. Nas configurações da sua conta OpenRouter, ou pelo próprio app (abaixo), você pode restringir os provedores que treinam com dados dos usuários.
 
+1. Abra o **Menu ▸ Preferências** e **cole sua chave da API**:
+   - na aba **OpenRouter**, a chave do [OpenRouter](https://openrouter.ai/keys);
+   - na aba **Maritaca**, a chave da [Maritaca AI](https://plataforma.maritaca.ai).
+2. Clique no seletor de modelo no cabeçalho e escolha o modelo desejado. Os modelos da Maritaca aparecem com o prefixo `maritaca/`
+3. Use **Menu ▸ Atualizar modelos** para puxar o catálogo completo a qualquer momento (atualiza os dois provedores)
+4. **Enter** envia a mensagem — **Shift+Enter** quebra linha
+
+> **Observação:** pesquisa na web, filtro de privacidade, prioridade do provedor, esforço de raciocínio e o custo em $ no rodapé das respostas são recursos do OpenRouter. Nos modelos da Maritaca, o rodapé mostra apenas o número de tokens.
+
+---
+
+O POR.ai roda no seu computador, mas depende da conexão com a internet — sem telemetria, sem servidor intermediário próprio. As conversas são salvas localmente em `~/.local/share/por-ai/` e a chave da API fica em `~/.config/por-ai/config.json` (permissão `0600`).
+
 Com os modelos da **Maritaca**, as mensagens vão direto para a API da Maritaca, sem passar pelo OpenRouter. Os modelos com final `-br-sp` processam tudo em território brasileiro.
 
 ### Pelo próprio app
+
+O POR.ai roda no seu computador, mas depende da conexão com a internet — sem telemetria, sem servidor intermediário próprio. As conversas são salvas localmente em `~/.local/share/por-ai/` e as chaves da API ficam em `~/.config/por-ai/config.json` (permissão `0600`).
+
+O conteúdo das mensagens e arquivos anexados é enviado ao **OpenRouter**, que os encaminha ao provedor do modelo escolhido. Nas configurações da sua conta OpenRouter, ou em **Preferências ▸ OpenRouter ▸ Privacidade**, você pode restringir provedores que treinam com dados dos usuários.
+
+Com os modelos da **Maritaca**, as mensagens vão direto para a API da Maritaca, sem passar pelo OpenRouter. Os modelos com final `-br-sp` processam tudo em território brasileiro.
 
 Em **Preferências ▸ OpenRouter ▸ Privacidade ▸ Provedores permitidos**, escolha:
 
