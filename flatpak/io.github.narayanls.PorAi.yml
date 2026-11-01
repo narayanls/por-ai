@@ -7,9 +7,9 @@ runtime-version: "50"
 sdk: org.gnome.Sdk
 command: por-ai
 
-# Mantém as traduções (ex.: menu do corretor da libspelling) dentro do próprio
-# app em vez de separá-las na extensão .Locale — assim um bundle .flatpak de
-# arquivo único já sai completo.
+# Mantém as traduções (do próprio POR.ai e do menu do corretor da libspelling)
+# dentro do app em vez de separá-las na extensão .Locale — assim um bundle
+# .flatpak de arquivo único já sai completo.
 separate-locales: false
 
 finish-args:
@@ -59,14 +59,14 @@ modules:
         url: https://download.gnome.org/sources/libspelling/0.4/libspelling-0.4.10.tar.xz
         sha256: 56e3f01a3a18b575beea4c34349f99cdaba316e1f7c271b1231f7bcf5d9af73b
 
-  # Dicionário pt_BR (equivalente ao hunspell-pt-br do PKGBUILD). O app cria o
-  # corretor travado em "pt_BR"; o enchant procura em $XDG_DATA_DIRS/hunspell,
-  # e /app/share faz parte desse caminho dentro do Flatpak.
-  - name: hunspell-pt-br
+  # Dicionários do corretor (equivalentes aos hunspell-* do PKGBUILD). O app
+  # usa o dicionário do idioma da interface (pt_BR, en_US ou es_ES); o enchant
+  # procura em $XDG_DATA_DIRS/hunspell, e /app/share faz parte desse caminho
+  # dentro do Flatpak.
+  - name: hunspell-dicionarios
     buildsystem: simple
     build-commands:
-      - install -Dm644 pt_BR.aff /app/share/hunspell/pt_BR.aff
-      - install -Dm644 pt_BR.dic /app/share/hunspell/pt_BR.dic
+      - install -Dm644 -t /app/share/hunspell pt_BR.aff pt_BR.dic en_US.aff en_US.dic es_ES.aff es_ES.dic
     sources:
       - type: file
         url: https://raw.githubusercontent.com/LibreOffice/dictionaries/libreoffice-26.8.1.1/pt_BR/pt_BR.aff
@@ -74,6 +74,18 @@ modules:
       - type: file
         url: https://raw.githubusercontent.com/LibreOffice/dictionaries/libreoffice-26.8.1.1/pt_BR/pt_BR.dic
         sha256: a38bfb26b68ece2834e79fe83e48d5792652970ace12db89d1b9674bf9933183
+      - type: file
+        url: https://raw.githubusercontent.com/LibreOffice/dictionaries/libreoffice-26.8.1.1/en/en_US.aff
+        sha256: e746c882dd6f303c2c46e7452804b9201115a6942cfeb15f18f8edf774d2e24e
+      - type: file
+        url: https://raw.githubusercontent.com/LibreOffice/dictionaries/libreoffice-26.8.1.1/en/en_US.dic
+        sha256: f0b1a234bd178bdd01875b2a392a9647f888b8fe879f79c52aae62c2759b3647
+      - type: file
+        url: https://raw.githubusercontent.com/LibreOffice/dictionaries/libreoffice-26.8.1.1/es/es_ES.aff
+        sha256: e73a9bf8e1383f4986a5dc9e2fbed49371c0c61f511c626d15586bd433c1cad9
+      - type: file
+        url: https://raw.githubusercontent.com/LibreOffice/dictionaries/libreoffice-26.8.1.1/es/es_ES.dic
+        sha256: 6975dddec3d5d2c676069537bc67b4b5f786c65c5d4cf6703a82acf779ac9ec1
 
   - name: por-ai
     buildsystem: simple
@@ -82,7 +94,8 @@ modules:
       - mkdir -p /app/bin /app/share/por-ai
       - cp -r share/por-ai/. /app/share/por-ai/
       - find /app/share/por-ai -type d -name '__pycache__' -prune -exec rm -rf {} +
-
+      # Traduções (po/*.po -> /app/share/locale/<idioma>/LC_MESSAGES/por-ai.mo)
+      - sh po/build-mo.sh /app
       # Versão que o core/updater.py compara com a release do GitHub: sai do
       # <release> mais recente do metainfo (o mesmo valor que aparece em
       # `flatpak info`). Atualize o metainfo com o sync_metainfo_version.py
@@ -114,3 +127,7 @@ modules:
     sources:
       - type: dir
         path: usr
+      # A pasta po/ fica ao lado de usr/, então precisa vir como fonte própria
+      - type: dir
+        path: po
+        dest: po
