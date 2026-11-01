@@ -54,6 +54,7 @@ from ui.message_row import MessageRow
 from ui.preferences import PreferencesWindow
 from ui import color_schemes
 from ui.theme_window import ThemeWindow
+from core.i18n import _, ngettext, spellcheck_language
 
 logger = logging.getLogger(__name__)
 
@@ -278,7 +279,7 @@ class PorAiWindow(Adw.ApplicationWindow):
         # Botão de mostrar/ocultar a barra lateral.
         self._sidebar_toggle = Gtk.ToggleButton()
         self._sidebar_toggle.set_icon_name("sidebar-show-symbolic")
-        self._sidebar_toggle.set_tooltip_text("Mostrar/ocultar conversas")
+        self._sidebar_toggle.set_tooltip_text(_("Mostrar/ocultar conversas"))
         header.pack_start(self._sidebar_toggle)
 
         # Seletor de modelo: MenuButton + Popover próprio com SearchEntry e
@@ -290,7 +291,7 @@ class PorAiWindow(Adw.ApplicationWindow):
         self._selected_model_id: Optional[str] = self.config.default_model
 
         self._model_button = Gtk.MenuButton()
-        self._model_button.set_tooltip_text("Selecionar modelo")
+        self._model_button.set_tooltip_text(_("Selecionar modelo"))
         self._model_button.add_css_class("flat")
         self._model_button.set_label(self._short_model_label(self._selected_model_id))
         self._model_popover = self._build_model_popover()
@@ -300,23 +301,23 @@ class PorAiWindow(Adw.ApplicationWindow):
         # Botão "nova conversa".
         new_button = Gtk.Button()
         new_button.set_icon_name("document-new-symbolic")
-        new_button.set_tooltip_text("Nova conversa")
+        new_button.set_tooltip_text(_("Nova conversa"))
         new_button.set_action_name("win.new-chat")
         header.pack_start(new_button)
 
         # Menu principal.
         menu = Gio.Menu()
-        menu.append("Nova conversa", "win.new-chat")
-        menu.append("Atualizar modelos", "win.refresh-models")
-        menu.append("Preferências", "win.preferences")
-        menu.append("Temas", "win.color-scheme")
-        menu.append("Sobre o POR.ai", "win.about")
-        menu.append("Verificar atualizações", "win.check-update")
+        menu.append(_("Nova conversa"), "win.new-chat")
+        menu.append(_("Atualizar modelos"), "win.refresh-models")
+        menu.append(_("Preferências"), "win.preferences")
+        menu.append(_("Temas"), "win.color-scheme")
+        menu.append(_("Sobre o POR.ai"), "win.about")
+        menu.append(_("Verificar atualizações"), "win.check-update")
 
         menu_button = Gtk.MenuButton()
         menu_button.set_icon_name("open-menu-symbolic")
         menu_button.set_menu_model(menu)
-        menu_button.set_tooltip_text("Menu")
+        menu_button.set_tooltip_text(_("Menu"))
         header.pack_end(menu_button)
         # Guardado para ancorar os balões de primeira execução (ver
         # _show_hint). O balão some sozinho quando o menu é aberto e, se
@@ -331,7 +332,7 @@ class PorAiWindow(Adw.ApplicationWindow):
         # Busca dentro da conversa aberta (Ctrl+F). Fica à esquerda do menu.
         self._chat_search_button = Gtk.ToggleButton()
         self._chat_search_button.set_icon_name("edit-find-symbolic")
-        self._chat_search_button.set_tooltip_text("Buscar nesta conversa (Ctrl+F)")
+        self._chat_search_button.set_tooltip_text(_("Buscar nesta conversa (Ctrl+F)"))
         header.pack_end(self._chat_search_button)
 
         return header
@@ -341,13 +342,13 @@ class PorAiWindow(Adw.ApplicationWindow):
 
         header = Adw.HeaderBar()
         header.set_show_end_title_buttons(False)
-        header.set_title_widget(Adw.WindowTitle(title="Conversas", subtitle=""))
+        header.set_title_widget(Adw.WindowTitle(title=_("Conversas"), subtitle=""))
 
         # Botão de busca no canto superior — alterna a barra de busca abaixo
         # do cabeçalho (padrão GNOME: Gtk.SearchBar ligado a um toggle).
         self._sidebar_search_button = Gtk.ToggleButton()
         self._sidebar_search_button.set_icon_name("system-search-symbolic")
-        self._sidebar_search_button.set_tooltip_text("Buscar conversas")
+        self._sidebar_search_button.set_tooltip_text(_("Buscar conversas"))
         header.pack_start(self._sidebar_search_button)
         #new_button = Gtk.Button()
         #new_button.set_icon_name("document-new-symbolic")
@@ -359,7 +360,7 @@ class PorAiWindow(Adw.ApplicationWindow):
         # Barra de busca: fica escondida (altura zero) até o botão ser
         # ativado ou o usuário digitar com a lista em foco.
         self._sidebar_search_entry = Gtk.SearchEntry()
-        self._sidebar_search_entry.set_placeholder_text("Buscar por nome da conversa…")
+        self._sidebar_search_entry.set_placeholder_text(_("Buscar por nome da conversa…"))
         self._sidebar_search_entry.set_hexpand(True)
         self._sidebar_search_entry.connect(
             "search-changed", self._on_sidebar_search_changed
@@ -465,8 +466,8 @@ class PorAiWindow(Adw.ApplicationWindow):
         attach_button = Gtk.Button()
         attach_button.set_icon_name("mail-attachment-symbolic")
         attach_button.set_tooltip_text(
-            f"Anexar arquivos — até {self.MAX_ATTACHMENTS} "
-            "(pdf, odt, ods, xlsx, txt, md, csv, json, py, toml, kdl, svg, "
+            _("Anexar arquivos — até {max}").format(max=self.MAX_ATTACHMENTS)
+            + " (pdf, odt, ods, xlsx, txt, md, csv, json, py, toml, kdl, svg, "
             "png, jpg, webp)"
         )
         attach_button.add_css_class("flat")
@@ -549,7 +550,7 @@ class PorAiWindow(Adw.ApplicationWindow):
 
         self._send_button = Gtk.Button()
         self._send_button.set_icon_name("send-to-symbolic")
-        self._send_button.set_tooltip_text("Enviar (Enter)")
+        self._send_button.set_tooltip_text(_("Enviar (Enter)"))
         self._send_button.add_css_class("suggested-action")
         self._send_button.set_valign(Gtk.Align.END)
         self._send_button.connect("clicked", self._on_send_clicked)
@@ -578,7 +579,7 @@ class PorAiWindow(Adw.ApplicationWindow):
             button.add_css_class("flat")
             button.set_sensitive(False)
             button.set_tooltip_text(
-                "A pesquisa na web só está disponível nos modelos do OpenRouter."
+                _("A pesquisa na web só está disponível nos modelos do OpenRouter.")
             )
             return
         button.set_sensitive(True)
@@ -586,15 +587,15 @@ class PorAiWindow(Adw.ApplicationWindow):
             button.remove_css_class("flat")
             button.add_css_class("suggested-action")
             button.set_tooltip_text(
-                "Pesquisa na web LIGADA para a próxima mensagem "
-                "(tem custo extra no OpenRouter). Clique para desligar."
+                _("Pesquisa na web LIGADA para a próxima mensagem "
+                  "(tem custo extra no OpenRouter). Clique para desligar.")
             )
         else:
             button.remove_css_class("suggested-action")
             button.add_css_class("flat")
             button.set_tooltip_text(
-                "Pesquisar na web nesta mensagem e mostrar as fontes "
-                "(custo extra; desliga sozinho após o envio)"
+                _("Pesquisar na web nesta mensagem e mostrar as fontes "
+                  "(custo extra; desliga sozinho após o envio)")
             )
 
     def _apply_source_style_scheme(self, scheme_id: Optional[str] = None) -> None:
@@ -762,16 +763,17 @@ class PorAiWindow(Adw.ApplicationWindow):
         try:
             provider = Spelling.Provider.get_default()
 
-            # Cria o checker travado em pt_BR. Diferente do que fizemos antes,
+            # Cria o checker no idioma da interface (pt_BR, en_US, es_ES…).
             # NÃO mascaramos falha em silêncio: logamos para saber se o
             # dicionário não foi encontrado.
+            spell_lang = spellcheck_language()
             checker = None
             try:
-                checker = Spelling.Checker.new(provider, "pt_BR")
+                checker = Spelling.Checker.new(provider, spell_lang)
                 lang = checker.get_language() if checker is not None else None
-                logger.debug("Corretor pt_BR criado; idioma=%r", lang)
+                logger.debug("Corretor %s criado; idioma=%r", spell_lang, lang)
             except Exception as exc:  # noqa: BLE001
-                logger.info("Falha ao criar corretor pt_BR: %r", exc)
+                logger.info("Falha ao criar corretor %s: %r", spell_lang, exc)
                 checker = Spelling.Checker.get_default()
                 logger.info("Usando corretor padrão; idioma=%r", checker.get_language())
 
@@ -784,8 +786,8 @@ class PorAiWindow(Adw.ApplicationWindow):
             # Reforça o idioma no próprio adapter (algumas versões expõem a
             # troca de idioma pela ação "spelling.language").
             try:
-                self._spell_adapter.set_language("pt_BR")
-                logger.debug("Idioma pt_BR aplicado no adapter")
+                self._spell_adapter.set_language(spell_lang)
+                logger.debug("Idioma %s aplicado no adapter", spell_lang)
             except Exception as exc:  # noqa: BLE001
                 logger.debug("adapter.set_language indisponível: %r", exc)
 
@@ -808,8 +810,8 @@ class PorAiWindow(Adw.ApplicationWindow):
         status.set_icon_name("user-available-symbolic")
         status.set_title("POR.ai")
         status.set_description(
-            "Chat privado com modelos do OpenRouter e da Maritaca.\n"
-            "Digite uma mensagem ou anexe um arquivo para análise."
+            _("Chat privado com modelos do OpenRouter e da Maritaca.\n"
+              "Digite uma mensagem ou anexe um arquivo para análise.")
         )
         status.set_vexpand(True)
 
@@ -826,9 +828,9 @@ class PorAiWindow(Adw.ApplicationWindow):
 
         warning_label = Gtk.Label(
             label=(
-                "Note que há modelos pagos e gratuitos. Através do site do "
-                "OpenRouter você pode adicionar saldo ou pesquisar por "
-                "free para encontrar modelos que não geram custos."
+                _("Note que há modelos pagos e gratuitos. Através do site do "
+                  "OpenRouter você pode adicionar saldo ou pesquisar por "
+                  "free para encontrar modelos que não geram custos.")
             )
         )
         warning_label.set_wrap(True)
@@ -866,7 +868,7 @@ class PorAiWindow(Adw.ApplicationWindow):
         box.set_margin_end(6)
 
         self._model_search = Gtk.SearchEntry()
-        self._model_search.set_placeholder_text("Buscar modelo…")
+        self._model_search.set_placeholder_text(_("Buscar modelo…"))
         self._model_search.connect("search-changed", self._on_model_search_changed)
         # Esc fecha o popover.
         self._model_search.connect("stop-search", lambda *_: popover.popdown())
@@ -964,7 +966,7 @@ class PorAiWindow(Adw.ApplicationWindow):
         """Mostra só a parte após a '/' para não sobrecarregar o header.
         Nos modelos da Maritaca, o provedor vai entre parênteses."""
         if not model_id:
-            return "Selecionar modelo"
+            return _("Selecionar modelo")
         if is_maritaca_model(model_id):
             return f"{to_api_id(model_id)} (Maritaca)"
         parts = model_id.split("/", 1)
@@ -1041,7 +1043,7 @@ class PorAiWindow(Adw.ApplicationWindow):
             return
 
         if not self.config.is_configured():
-            self._toast("Configure a chave da API em Preferências.")
+            self._toast(_("Configure a chave da API em Preferências."))
             self._prompt_for_api_key()
             return
 
@@ -1129,7 +1131,8 @@ class PorAiWindow(Adw.ApplicationWindow):
         # vários segundos até o primeiro token, e a bolha vazia parecia
         # travamento. É substituído pelo primeiro pedaço que chegar.
         self._streaming_row.set_text(
-            "_🌐 Pesquisando na web…_" if web_search else "_Aguardando o modelo…_"
+            "_🌐 " + _("Pesquisando na web…") + "_" if web_search
+            else "_" + _("Aguardando o modelo…") + "_"
         )
 
         self._clear_input()
@@ -1164,7 +1167,7 @@ class PorAiWindow(Adw.ApplicationWindow):
             self._web_search_button.set_active(False)
         else:
             self._set_busy(False)
-            self._toast("Já existe uma resposta em andamento.")
+            self._toast(_("Já existe uma resposta em andamento."))
 
 
     # Limites da renderização ao vivo. Antes, CADA pedaço vindo da rede
@@ -1258,12 +1261,12 @@ class PorAiWindow(Adw.ApplicationWindow):
 
     def _reasoning_duration_label(self) -> str:
         if self._reasoning_started_at is None:
-            return "Pensando…"
+            return _("Pensando…")
         end = self._reasoning_ended_at or time.monotonic()
         seconds = max(0, int(end - self._reasoning_started_at))
         if self._reasoning_ended_at is not None:
-            return f"Pensou por {seconds} s"
-        return f"Pensando… ({seconds} s)"
+            return _("Pensou por {seconds} s").format(seconds=seconds)
+        return _("Pensando… ({seconds} s)").format(seconds=seconds)
 
     def _on_retry(self, attempt: int, total: int, delay: float) -> bool:
         """Chamado quando uma falha transitória (timeout, queda de conexão,
@@ -1271,7 +1274,8 @@ class PorAiWindow(Adw.ApplicationWindow):
         vazia até a próxima tentativa ter sucesso; o toast só avisa que o
         app está tentando de novo em vez de já ter desistido."""
         self._toast(
-            f"⚠️ Conexão falhou, tentando de novo ({attempt}/{total}) em {delay:.0f}s…",
+            "⚠️ " + _("Conexão falhou, tentando de novo ({attempt}/{total}) em {delay}s…").format(
+                attempt=attempt, total=total, delay=f"{delay:.0f}"),
             timeout=max(2, int(delay)),
         )
         return False
@@ -1417,7 +1421,7 @@ class PorAiWindow(Adw.ApplicationWindow):
         self._cancel_stream_render()
         if self._streaming_row is not None:
             if not full_text.strip():
-                self._streaming_row.set_text("(resposta vazia ou cancelada)")
+                self._streaming_row.set_text(_("(resposta vazia ou cancelada)"))
             else:
                 self._streaming_row.set_text(full_text)
             assistant_message: Dict[str, Any] = {
@@ -1474,12 +1478,12 @@ class PorAiWindow(Adw.ApplicationWindow):
     def _set_busy(self, busy: bool) -> None:
         if busy:
             self._send_button.set_icon_name("media-playback-stop-symbolic")
-            self._send_button.set_tooltip_text("Parar")
+            self._send_button.set_tooltip_text(_("Parar"))
             self._send_button.remove_css_class("suggested-action")
             self._send_button.add_css_class("destructive-action")
         else:
             self._send_button.set_icon_name("send-to-symbolic")
-            self._send_button.set_tooltip_text("Enviar (Enter)")
+            self._send_button.set_tooltip_text(_("Enviar (Enter)"))
             self._send_button.remove_css_class("destructive-action")
             self._send_button.add_css_class("suggested-action")
 
@@ -1519,7 +1523,7 @@ class PorAiWindow(Adw.ApplicationWindow):
 
     def _build_chat_search_bar(self) -> Gtk.Widget:
         self._chat_search_entry = Gtk.SearchEntry()
-        self._chat_search_entry.set_placeholder_text("Buscar nesta conversa…")
+        self._chat_search_entry.set_placeholder_text(_("Buscar nesta conversa…"))
         self._chat_search_entry.set_hexpand(True)
         self._chat_search_entry.connect("search-changed", self._on_chat_search_changed)
         # Enter / Ctrl+G = próxima; Shift+Enter / Ctrl+Shift+G = anterior.
@@ -1543,13 +1547,13 @@ class PorAiWindow(Adw.ApplicationWindow):
 
         prev_button = Gtk.Button()
         prev_button.set_icon_name("go-up-symbolic")
-        prev_button.set_tooltip_text("Anterior (Shift+Enter)")
+        prev_button.set_tooltip_text(_("Anterior (Shift+Enter)"))
         prev_button.add_css_class("flat")
         prev_button.connect("clicked", lambda *_: self._chat_search_step(-1))
 
         next_button = Gtk.Button()
         next_button.set_icon_name("go-down-symbolic")
-        next_button.set_tooltip_text("Próxima (Enter)")
+        next_button.set_tooltip_text(_("Próxima (Enter)"))
         next_button.add_css_class("flat")
         next_button.connect("clicked", lambda *_: self._chat_search_step(1))
 
@@ -1675,7 +1679,7 @@ class PorAiWindow(Adw.ApplicationWindow):
                 self._chat_search_hits.extend((row, i) for i in range(len(ranges)))
 
         if not self._chat_search_hits:
-            self._chat_search_count.set_text("Nenhum")
+            self._chat_search_count.set_text(_("Nenhum"))
             self._chat_search_entry.add_css_class("error")
             return
 
@@ -1711,7 +1715,8 @@ class PorAiWindow(Adw.ApplicationWindow):
         row.set_search_highlights(self._chat_search_ranges[row], local)
         self._chat_search_current_row = row
         self._chat_search_count.set_text(
-            f"{self._chat_search_index + 1} de {len(self._chat_search_hits)}"
+            _("{current} de {total}").format(
+                current=self._chat_search_index + 1, total=len(self._chat_search_hits))
         )
 
         y = self._chat_search_hit_y(row, local)
@@ -1759,7 +1764,7 @@ class PorAiWindow(Adw.ApplicationWindow):
         if status == "ok":
             self._refresh_attachment_bar()
         elif status == "full":
-            self._toast(f"Máximo de {self.MAX_ATTACHMENTS} arquivos por mensagem.")
+            self._toast(_("Máximo de {max} arquivos por mensagem.").format(max=self.MAX_ATTACHMENTS))
         elif status == "unsupported":
             self._toast_unsupported(path)
 
@@ -1806,17 +1811,17 @@ class PorAiWindow(Adw.ApplicationWindow):
             if path:
                 self.attach_file(path)
             else:
-                self._toast("Só é possível anexar arquivos locais.")
+                self._toast(_("Só é possível anexar arquivos locais."))
         return True
 
     def _on_attach(self, _button) -> None:
         # Não abre o seletor se já atingiu o limite.
         if len(self._pending_attachments) >= self.MAX_ATTACHMENTS:
-            self._toast(f"Máximo de {self.MAX_ATTACHMENTS} arquivos por mensagem.")
+            self._toast(_("Máximo de {max} arquivos por mensagem.").format(max=self.MAX_ATTACHMENTS))
             return
 
         dialog = Gtk.FileDialog()
-        dialog.set_title("Anexar arquivos")
+        dialog.set_title(_("Anexar arquivos"))
 
         filters = Gio.ListStore.new(Gtk.FileFilter)
 
@@ -1866,9 +1871,9 @@ class PorAiWindow(Adw.ApplicationWindow):
         if added:
             self._refresh_attachment_bar()
         if reached_limit:
-            self._toast(f"Limite de {self.MAX_ATTACHMENTS} arquivos atingido.")
+            self._toast(_("Limite de {max} arquivos atingido.").format(max=self.MAX_ATTACHMENTS))
         elif unsupported and not added:
-            self._toast("Nenhum arquivo suportado foi anexado.")
+            self._toast(_("Nenhum arquivo suportado foi anexado."))
 
     def _remove_attachment(self, path: str) -> None:
         if path in self._pending_attachments:
@@ -1918,7 +1923,7 @@ class PorAiWindow(Adw.ApplicationWindow):
         remove.set_icon_name("window-close-symbolic")
         remove.add_css_class("flat")
         remove.add_css_class("circular")
-        remove.set_tooltip_text("Remover anexo")
+        remove.set_tooltip_text(_("Remover anexo"))
         remove.connect("clicked", lambda *_: self._remove_attachment(path))
         chip.append(remove)
         return chip
@@ -1976,7 +1981,7 @@ class PorAiWindow(Adw.ApplicationWindow):
                 first_line = first_line.strip()
                 if first_line:
                     return first_line[:50]
-        return "Nova conversa"
+        return _("Nova conversa")
 
     def _persist(self) -> None:
         if not self._messages:
@@ -2054,7 +2059,7 @@ class PorAiWindow(Adw.ApplicationWindow):
         rename = Gtk.Button()
         rename.set_icon_name("document-edit-symbolic")
         rename.add_css_class("flat")
-        rename.set_tooltip_text("Renomear")
+        rename.set_tooltip_text(_("Renomear"))
         rename.connect(
             "clicked",
             lambda *_: self._on_rename_conv(meta["id"], meta["title"]),
@@ -2064,7 +2069,7 @@ class PorAiWindow(Adw.ApplicationWindow):
         delete = Gtk.Button()
         delete.set_icon_name("user-trash-symbolic")
         delete.add_css_class("flat")
-        delete.set_tooltip_text("Excluir")
+        delete.set_tooltip_text(_("Excluir"))
         delete.connect("clicked", lambda *_: self._on_delete_conv(meta["id"]))
         btn_box.append(delete)
 
@@ -2085,16 +2090,18 @@ class PorAiWindow(Adw.ApplicationWindow):
             return ""
         delta = max(0, int(time.time() - epoch))
         if delta < 60:
-            return "agora"
+            return _("agora")
         if delta < 3600:
-            return f"há {delta // 60} min"
+            return _("há {n} min").format(n=delta // 60)
         if delta < 86400:
-            return f"há {delta // 3600} h"
+            return _("há {n} h").format(n=delta // 3600)
         if delta < 172800:
-            return "ontem"
+            return _("ontem")
         if delta < 604800:
-            return f"há {delta // 86400} dias"
-        return time.strftime("%d/%m/%Y", time.localtime(epoch))
+            days = delta // 86400
+            return ngettext("há {n} dia", "há {n} dias", days).format(n=days)
+        # TRANSLATORS: formato de data do strftime (ex.: %m/%d/%Y em inglês).
+        return time.strftime(_("%d/%m/%Y"), time.localtime(epoch))
 
     def _on_conv_activated(self, _listbox, row: Gtk.ListBoxRow) -> None:
         conv_id = row.get_name()
@@ -2107,7 +2114,7 @@ class PorAiWindow(Adw.ApplicationWindow):
     def _load_conversation(self, conv_id: str) -> None:
         data = self.store.load(conv_id)
         if data is None:
-            self._toast("Não foi possível abrir a conversa.")
+            self._toast(_("Não foi possível abrir a conversa."))
             self._reload_sidebar()
             return
 
@@ -2182,10 +2189,10 @@ class PorAiWindow(Adw.ApplicationWindow):
     def _on_rename_conv(self, conv_id: str, current_title: str) -> None:
         """Abre um diálogo para renomear a conversa."""
         dialog = Adw.AlertDialog()
-        dialog.set_heading("Renomear conversa")
-        dialog.set_body("Digite o novo nome:")
-        dialog.add_response("cancel", "Cancelar")
-        dialog.add_response("rename", "Renomear")
+        dialog.set_heading(_("Renomear conversa"))
+        dialog.set_body(_("Digite o novo nome:"))
+        dialog.add_response("cancel", _("Cancelar"))
+        dialog.add_response("rename", _("Renomear"))
         dialog.set_default_response("rename")
         dialog.set_close_response("cancel")
         dialog.set_response_appearance(
@@ -2219,12 +2226,12 @@ class PorAiWindow(Adw.ApplicationWindow):
 
     def _on_refresh_models(self, *_args) -> None:
         if not self.config.is_configured():
-            self._toast("Configure a chave da API para buscar modelos.")
+            self._toast(_("Configure a chave da API para buscar modelos."))
             return
         if self._models_fetch_running:
-            self._toast("O catálogo de modelos já está sendo atualizado…")
+            self._toast(_("O catálogo de modelos já está sendo atualizado…"))
             return
-        self._toast("Buscando catálogo de modelos…")
+        self._toast(_("Buscando catálogo de modelos…"))
         self._start_models_fetch(automatic=False)
 
     def _start_models_fetch(self, automatic: bool) -> None:
@@ -2268,11 +2275,11 @@ class PorAiWindow(Adw.ApplicationWindow):
             if not automatic:
                 if self.config.privacy_filter == "zdr":
                     self._toast(
-                        "Nenhum modelo com retenção zero disponível. A lista "
-                        "anterior foi mantida."
+                        _("Nenhum modelo com retenção zero disponível. A lista "
+                          "anterior foi mantida.")
                     )
                 else:
-                    self._toast("Nenhum modelo retornado.")
+                    self._toast(_("Nenhum modelo retornado."))
             return False
         current = self._current_model()
         # model_ids são só os do OpenRouter; os da Maritaca já foram gravados
@@ -2285,13 +2292,25 @@ class PorAiWindow(Adw.ApplicationWindow):
         available = self.config.available_models
         self._model_list = list(available)
         self._select_model(current if current in available else available[0])
-        suffix = " com retenção zero" if self.config.privacy_filter == "zdr" else ""
+        count = len(available)
+        zdr = self.config.privacy_filter == "zdr"
         if automatic:
-            self._toast(
-                f"Catálogo atualizado automaticamente: {len(available)} modelos{suffix}."
-            )
+            if zdr:
+                msg = ngettext(
+                    "Catálogo atualizado automaticamente: {n} modelo com retenção zero.",
+                    "Catálogo atualizado automaticamente: {n} modelos com retenção zero.",
+                    count)
+            else:
+                msg = ngettext(
+                    "Catálogo atualizado automaticamente: {n} modelo.",
+                    "Catálogo atualizado automaticamente: {n} modelos.",
+                    count)
+        elif zdr:
+            msg = ngettext("{n} modelo disponível com retenção zero.",
+                           "{n} modelos disponíveis com retenção zero.", count)
         else:
-            self._toast(f"{len(available)} modelos disponíveis{suffix}.")
+            msg = ngettext("{n} modelo disponível.", "{n} modelos disponíveis.", count)
+        self._toast(msg.format(n=count))
         # Primeira vez com o catálogo carregado: apresenta o menu e o seletor.
         GLib.timeout_add(600, self._maybe_show_tour)
         return False
@@ -2311,18 +2330,18 @@ class PorAiWindow(Adw.ApplicationWindow):
 
     def _on_check_update(self, *_args) -> None:
         if not self._updater:
-            self._toast("Verificação de atualizações não disponível.")
+            self._toast(_("Verificação de atualizações não disponível."))
             return
-        self._toast("Verificando atualizações…")
+        self._toast(_("Verificando atualizações…"))
         self._updater.check_async(
             on_update_available=lambda release, local: GLib.idle_add(
                 self._show_update_dialog, release, local
             ),
             on_no_update=lambda: GLib.idle_add(
-                self._toast, "O POR.ai já está na versão mais recente."
+                self._toast, _("O POR.ai já está na versão mais recente.")
             ),
             on_error=lambda msg: GLib.idle_add(
-                self._toast, f"Não foi possível verificar atualizações: {msg}"
+                self._toast, _("Não foi possível verificar atualizações: {error}").format(error=msg)
             ),
         )
 
@@ -2408,14 +2427,14 @@ class PorAiWindow(Adw.ApplicationWindow):
         antes de carregar os modelos porque "Retenção zero" filtra a lista."""
         self._show_hint(
             self._menu_button,
-            "Antes: quem pode receber suas mensagens?",
-            "Com Retenção zero, só aparecem modelos com provedores que não "
-            "guardam nem treinam com elas. Você pode mudar isso depois em "
-            "Preferências ▸ OpenRouter ▸ Privacidade.",
+            _("Antes: quem pode receber suas mensagens?"),
+            _("Com Retenção zero, só aparecem modelos com provedores que não "
+              "guardam nem treinam com elas. Você pode mudar isso depois em "
+              "Preferências ▸ OpenRouter ▸ Privacidade."),
             [
-                ("Todos", lambda _b: self._on_privacy_hint_choice(""), False),
-                ("Sem treino", lambda _b: self._on_privacy_hint_choice("no_training"), False),
-                ("Retenção zero", lambda _b: self._on_privacy_hint_choice("zdr"), False),
+                (_("Todos"), lambda _b: self._on_privacy_hint_choice(""), False),
+                (_("Sem treino"), lambda _b: self._on_privacy_hint_choice("no_training"), False),
+                (_("Retenção zero"), lambda _b: self._on_privacy_hint_choice("zdr"), False),
             ],
         )
 
@@ -2430,13 +2449,13 @@ class PorAiWindow(Adw.ApplicationWindow):
         """Balão 2: ancorado no botão de menu, explicando o próximo passo."""
         self._show_hint(
             self._menu_button,
-            "Próximo passo: carregar os modelos",
-            "Clique em Atualizar agora. Depois, você pode atualizar por este "
-            "menu quando quiser, ou deixar automático: o app atualiza ao "
-            "abrir, no máximo uma vez por dia.",
+            _("Próximo passo: carregar os modelos"),
+            _("Clique em Atualizar agora. Depois, você pode atualizar por este "
+              "menu quando quiser, ou deixar automático: o app atualiza ao "
+              "abrir, no máximo uma vez por dia."),
             [
-                ("Deixar automático", self._on_models_hint_auto, False),
-                ("Atualizar agora", self._on_models_hint_refresh, True),
+                (_("Deixar automático"), self._on_models_hint_auto, False),
+                (_("Atualizar agora"), self._on_models_hint_refresh, True),
             ],
         )
 
@@ -2471,10 +2490,10 @@ class PorAiWindow(Adw.ApplicationWindow):
         self._model_hint_pending = True
         self._show_hint(
             self._menu_button,
-            "Deixe o POR.ai do seu jeito",
-            "Neste menu, em Preferências, você configura o comportamento "
-            "da IA. Em Temas, altera as cores da interface.",
-            [("Próximo", self._show_model_hint, True)],
+            _("Deixe o POR.ai do seu jeito"),
+            _("Neste menu, em Preferências, você configura o comportamento "
+              "da IA. Em Temas, altera as cores da interface."),
+            [(_("Próximo"), self._show_model_hint, True)],
         )
 
     def _show_model_hint(self, *_args) -> bool:
@@ -2487,9 +2506,9 @@ class PorAiWindow(Adw.ApplicationWindow):
             self._model_hint_pending = False
             self._show_hint(
                 self._model_button,
-                "Escolha o modelo",
-                "Clique aqui para escolher o modelo desejado.",
-                [("Entendi", self._dismiss_hint, True)],
+                _("Escolha o modelo"),
+                _("Clique aqui para escolher o modelo desejado."),
+                [(_("Entendi"), self._dismiss_hint, True)],
             )
         return False
 
@@ -2603,7 +2622,7 @@ class PorAiWindow(Adw.ApplicationWindow):
         mensagem sem chave configurada (ver _on_send_clicked).
         """
         self._toast(
-            "Configure sua chave da API do OpenRouter ou da Maritaca para começar."
+            _("Configure sua chave da API do OpenRouter ou da Maritaca para começar.")
         )
         self._on_preferences()
         return False
@@ -2628,11 +2647,11 @@ class PorAiWindow(Adw.ApplicationWindow):
             application_name="POR.ai",
             application_icon="por-ai",
             version=APP_VERSION,
-            developer_name="Narayan L. Silva - feito com Claude Sonnet",
+            developer_name=_("Narayan L. Silva - feito com Claude Sonnet"),
             comments=(
-                "Personal Own Router AI — um chat com modelos do OpenRouter e "
-                "da Maritaca, "
-                "rodando localmente para manter o controle dos seus arquivos."
+                _("Personal Own Router AI — um chat com modelos do OpenRouter e "
+                  "da Maritaca, "
+                  "rodando localmente para manter o controle dos seus arquivos.")
             ),
             license_type=Gtk.License.GPL_3_0,
             website="https://github.com/narayanls/por-ai",

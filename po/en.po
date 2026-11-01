@@ -1,0 +1,1238 @@
+# Tradução do POR.ai — inglês.
+# Este arquivo é distribuído sob a mesma licença do POR.ai (GPL-3.0-or-later).
+msgid ""
+msgstr ""
+"Project-Id-Version: por-ai\n"
+"Report-Msgid-Bugs-To: https://github.com/narayanls/por-ai/issues\n"
+"POT-Creation-Date: 2026-11-01 11:05-0300\n"
+"PO-Revision-Date: 2026-11-01 11:06-0300\n"
+"Last-Translator: \n"
+"Language-Team: English\n"
+"Language: en\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=2; plural=(n != 1);\n"
+
+#: usr/share/por-ai/core/assistant.py:383
+msgid "retenção zero"
+msgstr "zero data retention"
+
+#: usr/share/por-ai/core/assistant.py:385
+msgid "sem treino com os seus dados"
+msgstr "no training on your data"
+
+#: usr/share/por-ai/core/assistant.py:388
+#, python-brace-format
+msgid ""
+"Nenhum provedor deste modelo atende ao filtro de privacidade ({level}). "
+"Escolha outro modelo ou afrouxe o filtro em Preferências ▸ OpenRouter ▸ "
+"Privacidade."
+msgstr ""
+"None of this model's providers meet the privacy filter ({level}). Choose "
+"another model or relax the filter in Preferences ▸ OpenRouter ▸ Privacy."
+
+#: usr/share/por-ai/core/assistant.py:599
+#, python-brace-format
+msgid ""
+"Configure a chave da API da Maritaca em Preferências para usar o modelo "
+"{model}."
+msgstr "Set up the Maritaca API key in Preferences to use the model {model}."
+
+#: usr/share/por-ai/core/assistant.py:604
+#, python-brace-format
+msgid ""
+"Configure a chave da API do OpenRouter em Preferências para usar o modelo "
+"{model}."
+msgstr ""
+"Set up the OpenRouter API key in Preferences to use the model {model}."
+
+#: usr/share/por-ai/core/assistant.py:616
+msgid ""
+"A pesquisa na web só está disponível nos modelos do OpenRouter. Desative o "
+"botão de pesquisa ou escolha outro modelo."
+msgstr ""
+"Web search is only available for OpenRouter models. Turn off the search "
+"button or choose another model."
+
+#: usr/share/por-ai/core/assistant.py:624
+msgid ""
+"A pesquisa na web não funciona com modelos de geração de imagem. Desative o "
+"botão de pesquisa e envie de novo."
+msgstr ""
+"Web search does not work with image generation models. Turn off the search "
+"button and send again."
+
+#: usr/share/por-ai/core/assistant.py:630
+#, python-brace-format
+msgid ""
+"O modelo {model} não aceita ferramentas (tools), então não consegue usar a "
+"pesquisa na web. Escolha outro modelo ou desative o botão de pesquisa."
+msgstr ""
+"The model {model} does not accept tools, so it cannot use web search. Choose"
+" another model or turn off the search button."
+
+#: usr/share/por-ai/core/assistant.py:746
+msgid "Cancelado pelo usuário."
+msgstr "Cancelled by the user."
+
+#: usr/share/por-ai/core/assistant.py:838
+msgid "Nenhum provedor configurado."
+msgstr "No provider configured."
+
+#: usr/share/por-ai/core/assistant.py:881
+#, python-brace-format
+msgid ""
+"Não foi possível obter a lista de provedores com retenção zero, então o "
+"catálogo não foi atualizado: {error}"
+msgstr ""
+"Could not get the list of zero data retention providers, so the catalog was "
+"not updated: {error}"
+
+#: usr/share/por-ai/core/assistant.py:923
+msgid "Instale python3-pypdf para anexar PDFs."
+msgstr "Install python3-pypdf to attach PDFs."
+
+#: usr/share/por-ai/core/assistant.py:925
+msgid "Instale python3-odfpy para anexar arquivos ODT."
+msgstr "Install python3-odfpy to attach ODT files."
+
+#: usr/share/por-ai/core/assistant.py:927
+msgid "Instale python3-odfpy para anexar arquivos ODS."
+msgstr "Install python3-odfpy to attach ODS files."
+
+#: usr/share/por-ai/core/assistant.py:929
+msgid "Instale python3-openpyxl para anexar arquivos XLSX."
+msgstr "Install python3-openpyxl to attach XLSX files."
+
+#: usr/share/por-ai/core/assistant.py:931
+msgid "Arquivos .docx não são suportados. Converta para .odt ou .txt."
+msgstr ".docx files are not supported. Convert to .odt or .txt."
+
+#: usr/share/por-ai/core/assistant.py:932
+msgid "Tipo de arquivo não suportado."
+msgstr "Unsupported file type."
+
+#: usr/share/por-ai/core/assistant.py:950
+#, python-brace-format
+msgid "Erro ao ler arquivo: {error}"
+msgstr "Error reading file: {error}"
+
+#: usr/share/por-ai/core/assistant.py:1003
+#, python-brace-format
+msgid "Erro ao ler imagem: {error}"
+msgstr "Error reading image: {error}"
+
+#: usr/share/por-ai/core/assistant.py:1046
+msgid ""
+"Rasterização de SVG indisponível (falta o loader de SVG da librsvg para o "
+"gdk-pixbuf)."
+msgstr ""
+"SVG rasterization unavailable (the librsvg SVG loader for gdk-pixbuf is "
+"missing)."
+
+#: usr/share/por-ai/core/assistant.py:1063
+#, python-brace-format
+msgid "Erro ao rasterizar SVG: {error}"
+msgstr "Error rasterizing SVG: {error}"
+
+#: usr/share/por-ai/core/assistant.py:1065
+msgid "Erro ao rasterizar SVG: PNG vazio."
+msgstr "Error rasterizing SVG: empty PNG."
+
+#: usr/share/por-ai/core/assistant.py:1216
+#: usr/share/por-ai/core/assistant.py:1230
+#, python-brace-format
+msgid "Baixar planilha (.{ext})"
+msgstr "Download spreadsheet (.{ext})"
+
+#: usr/share/por-ai/core/assistant.py:1242
+msgid "Instale python3-pypdf para ler PDFs."
+msgstr "Install python3-pypdf to read PDFs."
+
+#: usr/share/por-ai/core/assistant.py:1248
+#, python-brace-format
+msgid "Erro ao ler PDF: {error}"
+msgstr "Error reading PDF: {error}"
+
+#: usr/share/por-ai/core/assistant.py:1251
+msgid ""
+"Não foi possível extrair texto do PDF (pode ser imagem ou estar vazio)."
+msgstr "Could not extract text from the PDF (it may be an image or empty)."
+
+#: usr/share/por-ai/core/assistant.py:1259
+msgid "Instale python3-odfpy para ler ODT."
+msgstr "Install python3-odfpy to read ODT."
+
+#: usr/share/por-ai/core/assistant.py:1273
+#, python-brace-format
+msgid "Erro ao ler ODT: {error}"
+msgstr "Error reading ODT: {error}"
+
+#: usr/share/por-ai/core/assistant.py:1278
+msgid "Instale python3-odfpy para ler arquivos ODS."
+msgstr "Install python3-odfpy to read ODS files."
+
+#: usr/share/por-ai/core/assistant.py:1296
+#, python-brace-format
+msgid "Erro ao ler ODS: {error}"
+msgstr "Error reading ODS: {error}"
+
+#: usr/share/por-ai/core/assistant.py:1304
+msgid "Instale python3-openpyxl para ler arquivos XLSX."
+msgstr "Install python3-openpyxl to read XLSX files."
+
+#: usr/share/por-ai/core/assistant.py:1320
+#, python-brace-format
+msgid "Erro ao ler XLSX: {error}"
+msgstr "Error reading XLSX: {error}"
+
+#: usr/share/por-ai/core/assistant.py:1322
+msgid "A planilha está vazia."
+msgstr "The spreadsheet is empty."
+
+#: usr/share/por-ai/core/config.py:33
+msgid ""
+"Você é um assistente útil, direto e honesto. Responda no idioma do usuário, "
+"a menos que o usuário peça outro idioma. Quando o usuário enviar um arquivo "
+"para análise, não o reescreva sem ser solicitado. Quando não souber a "
+"resposta de uma pergunta informe o usuário de sua limitação e o oriente de "
+"como pode encontrar a resposta."
+msgstr ""
+"You are a helpful, direct and honest assistant. Reply in the user's language"
+" unless the user asks for another language. When the user sends a file for "
+"analysis, do not rewrite it unless asked. When you do not know the answer to"
+" a question, tell the user about your limitation and guide them on how they "
+"can find the answer."
+
+#: usr/share/por-ai/core/maritaca.py:56
+msgid "Configure a chave da API da Maritaca em Preferências."
+msgstr "Set up the Maritaca API key in Preferences."
+
+#: usr/share/por-ai/core/openrouter.py:71
+msgid "Configure a chave da API OpenRouter em Preferências."
+msgstr "Set up the OpenRouter API key in Preferences."
+
+#: usr/share/por-ai/core/openrouter.py:150
+#: usr/share/por-ai/core/openrouter.py:206
+#: usr/share/por-ai/core/openrouter.py:394
+#, python-brace-format
+msgid "Tempo de espera esgotado ao contatar {provider}: {error}"
+msgstr "Timed out contacting {provider}: {error}"
+
+#: usr/share/por-ai/core/openrouter.py:156
+#: usr/share/por-ai/core/openrouter.py:212
+#: usr/share/por-ai/core/openrouter.py:400
+#, python-brace-format
+msgid "Falha de conexão com {provider}: {error}"
+msgstr "Connection to {provider} failed: {error}"
+
+#: usr/share/por-ai/core/openrouter.py:161
+#: usr/share/por-ai/core/openrouter.py:217
+#: usr/share/por-ai/core/openrouter.py:405
+#, python-brace-format
+msgid "Falha ao contatar {provider}: {error}"
+msgstr "Failed to contact {provider}: {error}"
+
+#: usr/share/por-ai/core/openrouter.py:172
+#: usr/share/por-ai/core/openrouter.py:226
+#, python-brace-format
+msgid "{provider} retornou JSON inválido."
+msgstr "{provider} returned invalid JSON."
+
+#: usr/share/por-ai/core/openrouter.py:230
+msgid "O provedor retornou uma resposta vazia."
+msgstr "The provider returned an empty response."
+
+#: usr/share/por-ai/core/openrouter.py:253
+#: usr/share/por-ai/core/openrouter.py:423
+msgid ""
+"O modelo esgotou o limite de tokens pensando e não chegou a gerar a resposta"
+" final (finish_reason=error). Aumente o limite de tokens em Preferências, "
+"reduza o esforço de raciocínio, reduza o tamanho do prompt, ou tente um "
+"modelo com raciocínio menos verboso."
+msgstr ""
+"The model used up its token limit while thinking and never produced the "
+"final answer (finish_reason=error). Raise the token limit in Preferences, "
+"lower the reasoning effort, shorten the prompt, or try a model with less "
+"verbose reasoning."
+
+#: usr/share/por-ai/core/openrouter.py:261
+#: usr/share/por-ai/core/openrouter.py:431
+#, python-brace-format
+msgid ""
+"O modelo só retornou raciocínio interno, sem uma resposta final "
+"(finish_reason={reason})."
+msgstr ""
+"The model only returned internal reasoning, with no final answer "
+"(finish_reason={reason})."
+
+#: usr/share/por-ai/core/openrouter.py:263
+#: usr/share/por-ai/core/openrouter.py:433
+msgid "desconhecido"
+msgstr "unknown"
+
+#: usr/share/por-ai/core/openrouter.py:265
+#: usr/share/por-ai/core/openrouter.py:435
+msgid "O provedor não retornou conteúdo utilizável."
+msgstr "The provider returned no usable content."
+
+#: usr/share/por-ai/core/openrouter.py:414
+#, python-brace-format
+msgid "O provedor retornou um erro durante a geração: {error}"
+msgstr "The provider returned an error during generation: {error}"
+
+#: usr/share/por-ai/core/openrouter.py:668
+msgid "Erro desconhecido."
+msgstr "Unknown error."
+
+#. TRANSLATORS: {provider} é OpenRouter ou Maritaca; {status} vira "HTTP 401".
+#: usr/share/por-ai/core/openrouter.py:699
+#, python-brace-format
+msgid "{provider} respondeu {status}: {message}"
+msgstr "{provider} responded {status}: {message}"
+
+#: usr/share/por-ai/core/sheet_gen.py:207
+#: usr/share/por-ai/core/sheet_gen.py:208
+msgid "Planilha"
+msgstr "Spreadsheet"
+
+#: usr/share/por-ai/core/storage.py:89
+msgid "Conversa"
+msgstr "Conversation"
+
+#: usr/share/por-ai/core/updater.py:223
+#, python-brace-format
+msgid "Tente novamente após {time}."
+msgstr "Try again after {time}."
+
+#: usr/share/por-ai/core/updater.py:227
+msgid "Limite de requisições do GitHub atingido (60/hora por IP)."
+msgstr "GitHub request limit reached (60/hour per IP)."
+
+#: usr/share/por-ai/core/updater.py:231
+msgid ""
+"GitHub recusou a requisição (HTTP 403) — possível limite de requisições ou "
+"User-Agent bloqueado."
+msgstr ""
+"GitHub refused the request (HTTP 403) — possibly a request limit or a "
+"blocked User-Agent."
+
+#: usr/share/por-ai/core/updater.py:237
+#, python-brace-format
+msgid "GitHub respondeu HTTP {status}."
+msgstr "GitHub responded HTTP {status}."
+
+#: usr/share/por-ai/core/updater.py:354
+msgid "flatpak-spawn não encontrado dentro da sandbox."
+msgstr "flatpak-spawn not found inside the sandbox."
+
+#: usr/share/por-ai/core/updater.py:371 usr/share/por-ai/core/updater.py:524
+msgid "Instalando… confirme a senha de administrador na janela do sistema."
+msgstr "Installing… confirm the administrator password in the system window."
+
+#: usr/share/por-ai/core/updater.py:372
+msgid "Instalando a nova versão…"
+msgstr "Installing the new version…"
+
+#: usr/share/por-ai/core/updater.py:378
+#, python-brace-format
+msgid "Falha ao iniciar o flatpak: {error}"
+msgstr "Failed to start flatpak: {error}"
+
+#: usr/share/por-ai/core/updater.py:391
+msgid ""
+"Este Flatpak não tem permissão para instalar atualizações (falta --talk-"
+"name=org.freedesktop.Flatpak). Baixe o arquivo .flatpak na página de "
+"releases e instale manualmente."
+msgstr ""
+"This Flatpak is not allowed to install updates (missing --talk-"
+"name=org.freedesktop.Flatpak). Download the .flatpak file from the releases "
+"page and install it manually."
+
+#: usr/share/por-ai/core/updater.py:405
+msgid "O sistema não autorizou a instalação. Instale manualmente com:"
+msgstr "The system did not authorize the installation. Install manually with:"
+
+#: usr/share/por-ai/core/updater.py:410
+#, python-brace-format
+msgid "flatpak retornou código {code}."
+msgstr "flatpak returned code {code}."
+
+#: usr/share/por-ai/core/updater.py:479 usr/share/por-ai/core/updater.py:574
+msgid "Pressione qualquer tecla para fechar…"
+msgstr "Press any key to close…"
+
+#: usr/share/por-ai/core/updater.py:482 usr/share/por-ai/core/updater.py:578
+msgid "Instalando… digite sua senha no terminal que abriu."
+msgstr "Installing… type your password in the terminal that opened."
+
+#: usr/share/por-ai/core/updater.py:489 usr/share/por-ai/core/updater.py:582
+#, python-brace-format
+msgid "Falha ao abrir o terminal: {error}"
+msgstr "Failed to open the terminal: {error}"
+
+#: usr/share/por-ai/core/updater.py:496 usr/share/por-ai/core/updater.py:590
+msgid "A instalação não foi concluída (verifique o terminal)."
+msgstr "The installation did not finish (check the terminal)."
+
+#: usr/share/por-ai/core/updater.py:518
+msgid "Sistema não suportado para instalação automática."
+msgstr "System not supported for automatic installation."
+
+#: usr/share/por-ai/core/updater.py:534
+#, python-brace-format
+msgid "Falha ao iniciar o instalador: {error}"
+msgstr "Failed to start the installer: {error}"
+
+#: usr/share/por-ai/core/updater.py:539
+msgid "Autenticação cancelada pelo usuário."
+msgstr "Authentication cancelled by the user."
+
+#: usr/share/por-ai/core/updater.py:545
+#, python-brace-format
+msgid "Instalador retornou código {code}."
+msgstr "Installer returned code {code}."
+
+#: usr/share/por-ai/core/updater.py:554
+msgid ""
+"Não foi possível instalar automaticamente (sem pkexec nem terminal). Instale"
+" manualmente com:"
+msgstr ""
+"Could not install automatically (no pkexec or terminal). Install manually "
+"with:"
+
+#: usr/share/por-ai/core/updater.py:573
+msgid "Instalação finalizada."
+msgstr "Installation finished."
+
+#: usr/share/por-ai/core/updater.py:724
+#, python-brace-format
+msgid "Nenhum pacote encontrado para este sistema ({suffix})."
+msgstr "No package found for this system ({suffix})."
+
+#: usr/share/por-ai/main.py:170
+msgid "Mostrar / Ocultar"
+msgstr "Show / Hide"
+
+#: usr/share/por-ai/main.py:172
+msgid "Sair"
+msgstr "Quit"
+
+#: usr/share/por-ai/ui/color_schemes.py:179
+msgid "Lava Blue (Claro)"
+msgstr "Lava Blue (Light)"
+
+#: usr/share/por-ai/ui/color_schemes.py:199
+msgid "Pink TT (Claro)"
+msgstr "Pink TT (Light)"
+
+#: usr/share/por-ai/ui/color_schemes.py:212
+msgid "Padrão do sistema"
+msgstr "System default"
+
+#: usr/share/por-ai/ui/message_row.py:60
+msgid "Assistente"
+msgstr "Assistant"
+
+#: usr/share/por-ai/ui/message_row.py:71
+#: usr/share/por-ai/ui/message_row.py:367
+msgid "Copiar resposta"
+msgstr "Copy response"
+
+#: usr/share/por-ai/ui/message_row.py:80
+msgid "Você"
+msgstr "You"
+
+#: usr/share/por-ai/ui/message_row.py:180
+msgid "Fontes"
+msgstr "Sources"
+
+#: usr/share/por-ai/ui/message_row.py:362
+msgid "Copiado!"
+msgstr "Copied!"
+
+#: usr/share/por-ai/ui/message_row.py:385
+#, python-brace-format
+msgid "{n} token"
+msgid_plural "{n} tokens"
+msgstr[0] "{n} token"
+msgstr[1] "{n} tokens"
+
+#: usr/share/por-ai/ui/message_row.py:387
+#, python-brace-format
+msgid "{n} em cache"
+msgstr "{n} cached"
+
+#: usr/share/por-ai/ui/message_row.py:392
+#, python-brace-format
+msgid "{n} pesquisa na web"
+msgid_plural "{n} pesquisas na web"
+msgstr[0] "{n} web search"
+msgstr[1] "{n} web searches"
+
+#: usr/share/por-ai/ui/preferences.py:28
+msgid "Automático"
+msgstr "Automatic"
+
+#: usr/share/por-ai/ui/preferences.py:29
+msgid ""
+"Cada modelo usa o próprio padrão — o mais parecido com o chat no navegador."
+msgstr ""
+"Each model uses its own default — the closest to the chat in the browser."
+
+#: usr/share/por-ai/ui/preferences.py:30
+msgid "Desligado"
+msgstr "Off"
+
+#: usr/share/por-ai/ui/preferences.py:31
+msgid ""
+"Responde sem pensar antes. Mais rápido; pode errar mais em tarefas "
+"complexas. Em modelos que sempre pensam, usa o nível mais leve."
+msgstr ""
+"Answers without thinking first. Faster; may make more mistakes on complex "
+"tasks. On models that always think, uses the lightest level."
+
+#: usr/share/por-ai/ui/preferences.py:33
+msgid "Mínimo"
+msgstr "Minimal"
+
+#: usr/share/por-ai/ui/preferences.py:33
+msgid "Pensa o mínimo possível antes de responder."
+msgstr "Thinks as little as possible before answering."
+
+#: usr/share/por-ai/ui/preferences.py:34
+msgid "Baixo"
+msgstr "Low"
+
+#: usr/share/por-ai/ui/preferences.py:34
+msgid "Pensa pouco: bom equilíbrio entre rapidez e qualidade."
+msgstr "Thinks a little: a good balance between speed and quality."
+
+#: usr/share/por-ai/ui/preferences.py:35
+msgid "Médio"
+msgstr "Medium"
+
+#: usr/share/por-ai/ui/preferences.py:35
+msgid "Pensa moderadamente antes de responder."
+msgstr "Thinks moderately before answering."
+
+#: usr/share/por-ai/ui/preferences.py:36
+msgid "Alto"
+msgstr "High"
+
+#: usr/share/por-ai/ui/preferences.py:37
+msgid ""
+"Pensa bastante: melhor para problemas difíceis, mas bem mais lento e caro."
+msgstr ""
+"Thinks a lot: better for hard problems, but much slower and more expensive."
+
+#: usr/share/por-ai/ui/preferences.py:41
+msgid "Padrão"
+msgstr "Default"
+
+#: usr/share/por-ai/ui/preferences.py:42
+msgid "Deixa o OpenRouter escolher, priorizando os provedores mais baratos."
+msgstr "Lets OpenRouter choose, prioritizing the cheapest providers."
+
+#: usr/share/por-ai/ui/preferences.py:43
+msgid "Velocidade"
+msgstr "Speed"
+
+#: usr/share/por-ai/ui/preferences.py:44
+msgid "Prioriza o provedor que gera mais tokens por segundo."
+msgstr "Prioritizes the provider that generates the most tokens per second."
+
+#: usr/share/por-ai/ui/preferences.py:45
+msgid "Latência"
+msgstr "Latency"
+
+#: usr/share/por-ai/ui/preferences.py:46
+msgid "Prioriza o provedor que começa a responder mais rápido."
+msgstr "Prioritizes the provider that starts answering fastest."
+
+#: usr/share/por-ai/ui/preferences.py:47
+msgid "Preço"
+msgstr "Price"
+
+#: usr/share/por-ai/ui/preferences.py:48
+msgid "Sempre o provedor mais barato, sem balanceamento."
+msgstr "Always the cheapest provider, with no load balancing."
+
+#: usr/share/por-ai/ui/preferences.py:53 usr/share/por-ai/ui/window.py:2434
+msgid "Todos"
+msgstr "All"
+
+#: usr/share/por-ai/ui/preferences.py:54
+msgid ""
+"Qualquer provedor, inclusive os que retêm e treinam com os prompts (a "
+"política da sua conta no site do OpenRouter continua valendo)."
+msgstr ""
+"Any provider, including those that retain and train on prompts (your account"
+" policy on the OpenRouter website still applies)."
+
+#: usr/share/por-ai/ui/preferences.py:56 usr/share/por-ai/ui/window.py:2435
+msgid "Sem treino"
+msgstr "No training"
+
+#: usr/share/por-ai/ui/preferences.py:57
+msgid ""
+"Só provedores que não treinam com os seus prompts. Alguns ainda podem retê-"
+"los por um tempo (escudos amarelo e verde no site). A lista de modelos não "
+"muda; um modelo sem provedor compatível avisa no envio."
+msgstr ""
+"Only providers that do not train on your prompts. Some may still retain them"
+" for a while (yellow and green shields on the website). The model list does "
+"not change; a model with no compatible provider warns you when sending."
+
+#: usr/share/por-ai/ui/preferences.py:60 usr/share/por-ai/ui/window.py:2436
+msgid "Retenção zero"
+msgstr "Zero retention"
+
+#: usr/share/por-ai/ui/preferences.py:61
+msgid ""
+"Só provedores que não retêm nem treinam com os seus prompts (escudo verde no"
+" site). A lista de modelos passa a mostrar só os compatíveis."
+msgstr ""
+"Only providers that neither retain nor train on your prompts (green shield "
+"on the website). The model list then shows only compatible models."
+
+#: usr/share/por-ai/ui/preferences.py:77 usr/share/por-ai/ui/window.py:312
+msgid "Preferências"
+msgstr "Preferences"
+
+#: usr/share/por-ai/ui/preferences.py:103
+#: usr/share/por-ai/ui/preferences.py:207
+msgid "Conexão"
+msgstr "Connection"
+
+#: usr/share/por-ai/ui/preferences.py:105
+msgid ""
+"Sua chave fica salva localmente em ~/.config/por-ai/config.json (permissão "
+"0600). O conteúdo das conversas é enviado ao provedor do modelo escolhido "
+"através do OpenRouter. Opcional se você usar só a Maritaca."
+msgstr ""
+"Your key is saved locally in ~/.config/por-ai/config.json (permission 0600)."
+" The content of your conversations is sent to the provider of the chosen "
+"model through OpenRouter. Optional if you only use Maritaca."
+
+#: usr/share/por-ai/ui/preferences.py:112
+#: usr/share/por-ai/ui/preferences.py:217
+msgid "Chave da API"
+msgstr "API key"
+
+#: usr/share/por-ai/ui/preferences.py:117
+msgid "Nome do app (X-Title)"
+msgstr "App name (X-Title)"
+
+#: usr/share/por-ai/ui/preferences.py:130
+#: usr/share/por-ai/ui/preferences.py:221
+msgid "Confirmar"
+msgstr "Confirm"
+
+#: usr/share/por-ai/ui/preferences.py:135
+#: usr/share/por-ai/ui/preferences.py:226
+msgid "Salvar e fechar as preferências"
+msgstr "Save and close preferences"
+
+#: usr/share/por-ai/ui/preferences.py:146
+msgid "Privacidade"
+msgstr "Privacy"
+
+#: usr/share/por-ai/ui/preferences.py:148
+msgid ""
+"Filtra para quais provedores o OpenRouter pode enviar suas mensagens. A "
+"pesquisa na web usa um serviço de busca à parte, que não passa por este "
+"filtro."
+msgstr ""
+"Filters which providers OpenRouter may send your messages to. Web search "
+"uses a separate search service that does not go through this filter."
+
+#: usr/share/por-ai/ui/preferences.py:153
+msgid "Provedores permitidos"
+msgstr "Allowed providers"
+
+#: usr/share/por-ai/ui/preferences.py:161
+msgid "Modelos favoritos"
+msgstr "Favorite models"
+
+#: usr/share/por-ai/ui/preferences.py:163
+msgid ""
+"Um ID por linha (ex.: anthropic/claude-3.5-sonnet). Esses aparecem no "
+"seletor da janela. Use o menu ▸ Atualizar modelos para puxar o catálogo "
+"completo do OpenRouter."
+msgstr ""
+"One ID per line (e.g. anthropic/claude-3.5-sonnet). These appear in the "
+"window's selector. Use menu ▸ Update models to fetch the full OpenRouter "
+"catalog."
+
+#: usr/share/por-ai/ui/preferences.py:183
+msgid "Atualizar modelos automaticamente"
+msgstr "Update models automatically"
+
+#: usr/share/por-ai/ui/preferences.py:185
+msgid ""
+"Puxa o catálogo do OpenRouter ao abrir o app, no máximo uma vez a cada 24 "
+"horas. Substitui a lista abaixo, como o item do menu."
+msgstr ""
+"Fetches the OpenRouter catalog when the app opens, at most once every 24 "
+"hours. Replaces the list below, like the menu item."
+
+#: usr/share/por-ai/ui/preferences.py:209
+msgid ""
+"Chave da API da Maritaca AI (modelos Sabiá), criada em "
+"plataforma.maritaca.ai. Fica salva no mesmo arquivo local da chave do "
+"OpenRouter. As conversas com os modelos maritaca/… vão direto para a "
+"Maritaca, sem passar pelo OpenRouter. Opcional se você usar só o OpenRouter."
+msgstr ""
+"Maritaca AI API key (Sabiá models), created at plataforma.maritaca.ai. It is"
+" saved in the same local file as the OpenRouter key. Conversations with "
+"maritaca/… models go straight to Maritaca, without going through OpenRouter."
+" Optional if you only use OpenRouter."
+
+#: usr/share/por-ai/ui/preferences.py:237
+msgid "Modelos"
+msgstr "Models"
+
+#: usr/share/por-ai/ui/preferences.py:239
+msgid ""
+"Um ID por linha (ex.: sabia-4). O prefixo maritaca/ é acrescentado sozinho. "
+"Aparecem no seletor quando há chave da Maritaca. O menu ▸ Atualizar modelos "
+"também atualiza esta lista."
+msgstr ""
+"One ID per line (e.g. sabia-4). The maritaca/ prefix is added automatically."
+" They appear in the selector when there is a Maritaca key. Menu ▸ Update "
+"models also updates this list."
+
+#: usr/share/por-ai/ui/preferences.py:264
+msgid ""
+"Nos modelos da Maritaca não há pesquisa na web, filtro de privacidade, "
+"prioridade do provedor nem controle do esforço de raciocínio: esses recursos"
+" são do OpenRouter."
+msgstr ""
+"Maritaca models have no web search, privacy filter, provider priority or "
+"reasoning effort control: those features belong to OpenRouter."
+
+#: usr/share/por-ai/ui/preferences.py:307
+msgid "Comportamento"
+msgstr "Behavior"
+
+#: usr/share/por-ai/ui/preferences.py:311
+msgid "Geração"
+msgstr "Generation"
+
+#: usr/share/por-ai/ui/preferences.py:314
+msgid "Streaming"
+msgstr "Streaming"
+
+#: usr/share/por-ai/ui/preferences.py:315
+msgid "Mostrar a resposta sendo escrita em tempo real"
+msgstr "Show the response as it is being written"
+
+#: usr/share/por-ai/ui/preferences.py:320
+msgid "Ícone na bandeja do sistema"
+msgstr "System tray icon"
+
+#: usr/share/por-ai/ui/preferences.py:322
+msgid ""
+"Mantém o app acessível pela área de notificação. No GNOME, requer a extensão"
+" “AppIndicator and KStatusNotifierItem Support”."
+msgstr ""
+"Keeps the app reachable from the notification area. On GNOME, requires the "
+"“AppIndicator and KStatusNotifierItem Support” extension."
+
+#: usr/share/por-ai/ui/preferences.py:333
+msgid "Temperatura"
+msgstr "Temperature"
+
+#: usr/share/por-ai/ui/preferences.py:334
+msgid "0 = determinístico, 2 = muito criativo"
+msgstr "0 = deterministic, 2 = very creative"
+
+#: usr/share/por-ai/ui/preferences.py:359
+msgid "Prompt de sistema"
+msgstr "System prompt"
+
+#: usr/share/por-ai/ui/preferences.py:361
+msgid "Instrução enviada no início de toda conversa."
+msgstr "Instruction sent at the start of every conversation."
+
+#: usr/share/por-ai/ui/preferences.py:375
+msgid "Restaurar padrão"
+msgstr "Restore default"
+
+#: usr/share/por-ai/ui/preferences.py:379
+msgid "Voltar ao prompt de sistema padrão do POR.ai"
+msgstr "Go back to POR.ai's default system prompt"
+
+#: usr/share/por-ai/ui/preferences.py:410
+msgid "Velocidade e raciocínio"
+msgstr "Speed and reasoning"
+
+#: usr/share/por-ai/ui/preferences.py:412
+msgid ""
+"Modelos que “pensam” antes de responder ficam mais lentos quanto maior o "
+"esforço. O tempo gasto em cada etapa aparece no chat. Estas duas opções "
+"valem só para os modelos do OpenRouter."
+msgstr ""
+"Models that “think” before answering get slower the higher the effort. The "
+"time spent on each step appears in the chat. These two options only apply to"
+" OpenRouter models."
+
+#: usr/share/por-ai/ui/preferences.py:418
+msgid "Esforço de raciocínio"
+msgstr "Reasoning effort"
+
+#: usr/share/por-ai/ui/preferences.py:425
+msgid "Prioridade do provedor"
+msgstr "Provider priority"
+
+#: usr/share/por-ai/ui/theme_window.py:40
+#: usr/share/por-ai/ui/theme_window.py:50 usr/share/por-ai/ui/window.py:313
+msgid "Temas"
+msgstr "Themes"
+
+#: usr/share/por-ai/ui/theme_window.py:54
+msgid "Esquema de cores"
+msgstr "Color scheme"
+
+#: usr/share/por-ai/ui/theme_window.py:56
+msgid "Escolha uma paleta para a interface. A mudança é aplicada na hora."
+msgstr ""
+"Choose a palette for the interface. The change is applied immediately."
+
+#: usr/share/por-ai/ui/update_dialog.py:43
+msgid "Atualização disponível"
+msgstr "Update available"
+
+#: usr/share/por-ai/ui/update_dialog.py:56
+#, python-brace-format
+msgid "POR.ai {version} disponível"
+msgstr "POR.ai {version} available"
+
+#: usr/share/por-ai/ui/update_dialog.py:61
+#, python-brace-format
+msgid "Versão instalada: {version}"
+msgstr "Installed version: {version}"
+
+#: usr/share/por-ai/ui/update_dialog.py:102
+msgid "Agora não"
+msgstr "Not now"
+
+#: usr/share/por-ai/ui/update_dialog.py:105
+msgid "Atualizar"
+msgstr "Update"
+
+#: usr/share/por-ai/ui/update_dialog.py:131
+msgid "Baixando atualização…"
+msgstr "Downloading update…"
+
+#: usr/share/por-ai/ui/update_dialog.py:150
+#, python-brace-format
+msgid "Baixando… {percent}%"
+msgstr "Downloading… {percent}%"
+
+#: usr/share/por-ai/ui/update_dialog.py:171
+msgid ""
+"POR.ai atualizado com sucesso! Reinicie o aplicativo para usar a nova "
+"versão."
+msgstr "POR.ai updated successfully! Restart the app to use the new version."
+
+#: usr/share/por-ai/ui/update_dialog.py:175
+#: usr/share/por-ai/ui/update_dialog.py:186
+msgid "Fechar"
+msgstr "Close"
+
+#: usr/share/por-ai/ui/update_dialog.py:183
+#, python-brace-format
+msgid "Erro ao atualizar: {error}"
+msgstr "Update failed: {error}"
+
+#: usr/share/por-ai/ui/update_dialog.py:184
+msgid "Tentar de novo"
+msgstr "Try again"
+
+#: usr/share/por-ai/ui/window.py:282
+msgid "Mostrar/ocultar conversas"
+msgstr "Show/hide conversations"
+
+#: usr/share/por-ai/ui/window.py:294 usr/share/por-ai/ui/window.py:968
+msgid "Selecionar modelo"
+msgstr "Select model"
+
+#: usr/share/por-ai/ui/window.py:304 usr/share/por-ai/ui/window.py:310
+#: usr/share/por-ai/ui/window.py:1983
+msgid "Nova conversa"
+msgstr "New conversation"
+
+#: usr/share/por-ai/ui/window.py:311
+msgid "Atualizar modelos"
+msgstr "Update models"
+
+#: usr/share/por-ai/ui/window.py:314
+msgid "Sobre o POR.ai"
+msgstr "About POR.ai"
+
+#: usr/share/por-ai/ui/window.py:315
+msgid "Verificar atualizações"
+msgstr "Check for updates"
+
+#: usr/share/por-ai/ui/window.py:320
+msgid "Menu"
+msgstr "Menu"
+
+#: usr/share/por-ai/ui/window.py:335
+msgid "Buscar nesta conversa (Ctrl+F)"
+msgstr "Search this conversation (Ctrl+F)"
+
+#: usr/share/por-ai/ui/window.py:345
+msgid "Conversas"
+msgstr "Conversations"
+
+#: usr/share/por-ai/ui/window.py:351
+msgid "Buscar conversas"
+msgstr "Search conversations"
+
+#: usr/share/por-ai/ui/window.py:363
+msgid "Buscar por nome da conversa…"
+msgstr "Search by conversation name…"
+
+#: usr/share/por-ai/ui/window.py:469
+#, python-brace-format
+msgid "Anexar arquivos — até {max}"
+msgstr "Attach files — up to {max}"
+
+#: usr/share/por-ai/ui/window.py:553 usr/share/por-ai/ui/window.py:1485
+msgid "Enviar (Enter)"
+msgstr "Send (Enter)"
+
+#: usr/share/por-ai/ui/window.py:582
+msgid "A pesquisa na web só está disponível nos modelos do OpenRouter."
+msgstr "Web search is only available for OpenRouter models."
+
+#: usr/share/por-ai/ui/window.py:590
+msgid ""
+"Pesquisa na web LIGADA para a próxima mensagem (tem custo extra no "
+"OpenRouter). Clique para desligar."
+msgstr ""
+"Web search ON for the next message (extra cost on OpenRouter). Click to turn"
+" off."
+
+#: usr/share/por-ai/ui/window.py:597
+msgid ""
+"Pesquisar na web nesta mensagem e mostrar as fontes (custo extra; desliga "
+"sozinho após o envio)"
+msgstr ""
+"Search the web for this message and show the sources (extra cost; turns "
+"itself off after sending)"
+
+#: usr/share/por-ai/ui/window.py:812
+msgid ""
+"Chat privado com modelos do OpenRouter e da Maritaca.\n"
+"Digite uma mensagem ou anexe um arquivo para análise."
+msgstr ""
+"Private chat with OpenRouter and Maritaca models.\n"
+"Type a message or attach a file for analysis."
+
+#: usr/share/por-ai/ui/window.py:830
+msgid ""
+"Note que há modelos pagos e gratuitos. Através do site do OpenRouter você "
+"pode adicionar saldo ou pesquisar por free para encontrar modelos que não "
+"geram custos."
+msgstr ""
+"Note that there are paid and free models. On the OpenRouter website you can "
+"add credit or search for free to find models that cost nothing."
+
+#: usr/share/por-ai/ui/window.py:870
+msgid "Buscar modelo…"
+msgstr "Search model…"
+
+#: usr/share/por-ai/ui/window.py:1045
+msgid "Configure a chave da API em Preferências."
+msgstr "Set up the API key in Preferences."
+
+#: usr/share/por-ai/ui/window.py:1133
+msgid "Pesquisando na web…"
+msgstr "Searching the web…"
+
+#: usr/share/por-ai/ui/window.py:1134
+msgid "Aguardando o modelo…"
+msgstr "Waiting for the model…"
+
+#: usr/share/por-ai/ui/window.py:1169
+msgid "Já existe uma resposta em andamento."
+msgstr "A response is already in progress."
+
+#: usr/share/por-ai/ui/window.py:1263
+msgid "Pensando…"
+msgstr "Thinking…"
+
+#: usr/share/por-ai/ui/window.py:1267
+#, python-brace-format
+msgid "Pensou por {seconds} s"
+msgstr "Thought for {seconds} s"
+
+#: usr/share/por-ai/ui/window.py:1268
+#, python-brace-format
+msgid "Pensando… ({seconds} s)"
+msgstr "Thinking… ({seconds} s)"
+
+#: usr/share/por-ai/ui/window.py:1276
+#, python-brace-format
+msgid "Conexão falhou, tentando de novo ({attempt}/{total}) em {delay}s…"
+msgstr "Connection failed, retrying ({attempt}/{total}) in {delay}s…"
+
+#: usr/share/por-ai/ui/window.py:1423
+msgid "(resposta vazia ou cancelada)"
+msgstr "(empty or cancelled response)"
+
+#: usr/share/por-ai/ui/window.py:1480
+msgid "Parar"
+msgstr "Stop"
+
+#: usr/share/por-ai/ui/window.py:1525
+msgid "Buscar nesta conversa…"
+msgstr "Search this conversation…"
+
+#: usr/share/por-ai/ui/window.py:1549
+msgid "Anterior (Shift+Enter)"
+msgstr "Previous (Shift+Enter)"
+
+#: usr/share/por-ai/ui/window.py:1555
+msgid "Próxima (Enter)"
+msgstr "Next (Enter)"
+
+#: usr/share/por-ai/ui/window.py:1681
+msgid "Nenhum"
+msgstr "No results"
+
+#: usr/share/por-ai/ui/window.py:1717
+#, python-brace-format
+msgid "{current} de {total}"
+msgstr "{current} of {total}"
+
+#: usr/share/por-ai/ui/window.py:1766 usr/share/por-ai/ui/window.py:1819
+#, python-brace-format
+msgid "Máximo de {max} arquivos por mensagem."
+msgstr "Maximum of {max} files per message."
+
+#: usr/share/por-ai/ui/window.py:1813
+msgid "Só é possível anexar arquivos locais."
+msgstr "Only local files can be attached."
+
+#: usr/share/por-ai/ui/window.py:1823
+msgid "Anexar arquivos"
+msgstr "Attach files"
+
+#: usr/share/por-ai/ui/window.py:1873
+#, python-brace-format
+msgid "Limite de {max} arquivos atingido."
+msgstr "Limit of {max} files reached."
+
+#: usr/share/por-ai/ui/window.py:1875
+msgid "Nenhum arquivo suportado foi anexado."
+msgstr "No supported file was attached."
+
+#: usr/share/por-ai/ui/window.py:1925
+msgid "Remover anexo"
+msgstr "Remove attachment"
+
+#: usr/share/por-ai/ui/window.py:2061 usr/share/por-ai/ui/window.py:2194
+msgid "Renomear"
+msgstr "Rename"
+
+#: usr/share/por-ai/ui/window.py:2071
+msgid "Excluir"
+msgstr "Delete"
+
+#: usr/share/por-ai/ui/window.py:2092
+msgid "agora"
+msgstr "now"
+
+#: usr/share/por-ai/ui/window.py:2094
+#, python-brace-format
+msgid "há {n} min"
+msgstr "{n} min ago"
+
+#: usr/share/por-ai/ui/window.py:2096
+#, python-brace-format
+msgid "há {n} h"
+msgstr "{n} h ago"
+
+#: usr/share/por-ai/ui/window.py:2098
+msgid "ontem"
+msgstr "yesterday"
+
+#: usr/share/por-ai/ui/window.py:2101
+#, python-brace-format
+msgid "há {n} dia"
+msgid_plural "há {n} dias"
+msgstr[0] "{n} day ago"
+msgstr[1] "{n} days ago"
+
+#. TRANSLATORS: formato de data do strftime (ex.: %m/%d/%Y em inglês).
+#: usr/share/por-ai/ui/window.py:2103
+msgid "%d/%m/%Y"
+msgstr "%m/%d/%Y"
+
+#: usr/share/por-ai/ui/window.py:2116
+msgid "Não foi possível abrir a conversa."
+msgstr "Could not open the conversation."
+
+#: usr/share/por-ai/ui/window.py:2191
+msgid "Renomear conversa"
+msgstr "Rename conversation"
+
+#: usr/share/por-ai/ui/window.py:2192
+msgid "Digite o novo nome:"
+msgstr "Type the new name:"
+
+#: usr/share/por-ai/ui/window.py:2193
+msgid "Cancelar"
+msgstr "Cancel"
+
+#: usr/share/por-ai/ui/window.py:2228
+msgid "Configure a chave da API para buscar modelos."
+msgstr "Set up the API key to fetch models."
+
+#: usr/share/por-ai/ui/window.py:2231
+msgid "O catálogo de modelos já está sendo atualizado…"
+msgstr "The model catalog is already being updated…"
+
+#: usr/share/por-ai/ui/window.py:2233
+msgid "Buscando catálogo de modelos…"
+msgstr "Fetching model catalog…"
+
+#: usr/share/por-ai/ui/window.py:2277
+msgid ""
+"Nenhum modelo com retenção zero disponível. A lista anterior foi mantida."
+msgstr "No zero retention model available. The previous list was kept."
+
+#: usr/share/por-ai/ui/window.py:2281
+msgid "Nenhum modelo retornado."
+msgstr "No models returned."
+
+#: usr/share/por-ai/ui/window.py:2299
+#, python-brace-format
+msgid "Catálogo atualizado automaticamente: {n} modelo com retenção zero."
+msgid_plural ""
+"Catálogo atualizado automaticamente: {n} modelos com retenção zero."
+msgstr[0] "Catalog updated automatically: {n} zero retention model."
+msgstr[1] "Catalog updated automatically: {n} zero retention models."
+
+#: usr/share/por-ai/ui/window.py:2304
+#, python-brace-format
+msgid "Catálogo atualizado automaticamente: {n} modelo."
+msgid_plural "Catálogo atualizado automaticamente: {n} modelos."
+msgstr[0] "Catalog updated automatically: {n} model."
+msgstr[1] "Catalog updated automatically: {n} models."
+
+#: usr/share/por-ai/ui/window.py:2308
+#, python-brace-format
+msgid "{n} modelo disponível com retenção zero."
+msgid_plural "{n} modelos disponíveis com retenção zero."
+msgstr[0] "{n} zero retention model available."
+msgstr[1] "{n} zero retention models available."
+
+#: usr/share/por-ai/ui/window.py:2311
+#, python-brace-format
+msgid "{n} modelo disponível."
+msgid_plural "{n} modelos disponíveis."
+msgstr[0] "{n} model available."
+msgstr[1] "{n} models available."
+
+#: usr/share/por-ai/ui/window.py:2332
+msgid "Verificação de atualizações não disponível."
+msgstr "Update check not available."
+
+#: usr/share/por-ai/ui/window.py:2334
+msgid "Verificando atualizações…"
+msgstr "Checking for updates…"
+
+#: usr/share/por-ai/ui/window.py:2340
+msgid "O POR.ai já está na versão mais recente."
+msgstr "POR.ai is already up to date."
+
+#: usr/share/por-ai/ui/window.py:2343
+#, python-brace-format
+msgid "Não foi possível verificar atualizações: {error}"
+msgstr "Could not check for updates: {error}"
+
+#: usr/share/por-ai/ui/window.py:2429
+msgid "Antes: quem pode receber suas mensagens?"
+msgstr "First: who can receive your messages?"
+
+#: usr/share/por-ai/ui/window.py:2430
+msgid ""
+"Com Retenção zero, só aparecem modelos com provedores que não guardam nem "
+"treinam com elas. Você pode mudar isso depois em Preferências ▸ OpenRouter ▸"
+" Privacidade."
+msgstr ""
+"With Zero retention, only models whose providers neither keep nor train on "
+"them are shown. You can change this later in Preferences ▸ OpenRouter ▸ "
+"Privacy."
+
+#: usr/share/por-ai/ui/window.py:2451
+msgid "Próximo passo: carregar os modelos"
+msgstr "Next step: load the models"
+
+#: usr/share/por-ai/ui/window.py:2452
+msgid ""
+"Clique em Atualizar agora. Depois, você pode atualizar por este menu quando "
+"quiser, ou deixar automático: o app atualiza ao abrir, no máximo uma vez por"
+" dia."
+msgstr ""
+"Click Update now. Later, you can update from this menu whenever you want, or"
+" leave it automatic: the app updates when it opens, at most once a day."
+
+#: usr/share/por-ai/ui/window.py:2456
+msgid "Deixar automático"
+msgstr "Leave automatic"
+
+#: usr/share/por-ai/ui/window.py:2457
+msgid "Atualizar agora"
+msgstr "Update now"
+
+#: usr/share/por-ai/ui/window.py:2492
+msgid "Deixe o POR.ai do seu jeito"
+msgstr "Make POR.ai your own"
+
+#: usr/share/por-ai/ui/window.py:2493
+msgid ""
+"Neste menu, em Preferências, você configura o comportamento da IA. Em Temas,"
+" altera as cores da interface."
+msgstr ""
+"In this menu, Preferences sets how the AI behaves. Themes changes the "
+"interface colors."
+
+#: usr/share/por-ai/ui/window.py:2495
+msgid "Próximo"
+msgstr "Next"
+
+#: usr/share/por-ai/ui/window.py:2508
+msgid "Escolha o modelo"
+msgstr "Choose the model"
+
+#: usr/share/por-ai/ui/window.py:2509
+msgid "Clique aqui para escolher o modelo desejado."
+msgstr "Click here to choose the model you want."
+
+#: usr/share/por-ai/ui/window.py:2510
+msgid "Entendi"
+msgstr "Got it"
+
+#: usr/share/por-ai/ui/window.py:2624
+msgid "Configure sua chave da API do OpenRouter ou da Maritaca para começar."
+msgstr "Set up your OpenRouter or Maritaca API key to get started."
+
+#: usr/share/por-ai/ui/window.py:2649
+msgid "Narayan L. Silva - feito com Claude Sonnet"
+msgstr "Narayan L. Silva - made with Claude Sonnet"
+
+#: usr/share/por-ai/ui/window.py:2651
+msgid ""
+"Personal Own Router AI — um chat com modelos do OpenRouter e da Maritaca, "
+"rodando localmente para manter o controle dos seus arquivos."
+msgstr ""
+"Personal Own Router AI — a chat with OpenRouter and Maritaca models, running"
+" locally so you stay in control of your files."

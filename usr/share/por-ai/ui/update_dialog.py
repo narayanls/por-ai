@@ -21,6 +21,7 @@ gi.require_version("Adw", "1")
 from gi.repository import Adw, GLib, Gtk
 
 from core.updater import UpdateChecker
+from core.i18n import _
 
 
 class UpdateDialog(Adw.Dialog):
@@ -39,7 +40,7 @@ class UpdateDialog(Adw.Dialog):
         self._busy = False
 
         remote_tag = release.get("tag_name", "?")
-        self.set_title("Atualização disponível")
+        self.set_title(_("Atualização disponível"))
         self.set_content_width(440)
 
         toolbar = Adw.ToolbarView()
@@ -52,12 +53,12 @@ class UpdateDialog(Adw.Dialog):
         box.set_margin_end(18)
 
         heading = Gtk.Label()
-        heading.set_markup(f"<b>POR.ai {remote_tag} disponível</b>")
+        heading.set_markup("<b>" + GLib.markup_escape_text(_("POR.ai {version} disponível").format(version=remote_tag)) + "</b>")
         heading.set_xalign(0.0)
         heading.set_wrap(True)
         box.append(heading)
 
-        self._body = Gtk.Label(label=f"Versão instalada: {local_version}")
+        self._body = Gtk.Label(label=_("Versão instalada: {version}").format(version=local_version))
         self._body.set_xalign(0.0)
         self._body.set_wrap(True)
         box.append(self._body)
@@ -98,10 +99,10 @@ class UpdateDialog(Adw.Dialog):
         button_box.set_halign(Gtk.Align.END)
         button_box.set_margin_top(4)
 
-        self._later_btn = Gtk.Button(label="Agora não")
+        self._later_btn = Gtk.Button(label=_("Agora não"))
         self._later_btn.connect("clicked", lambda *_: self.close())
 
-        self._update_btn = Gtk.Button(label="Atualizar")
+        self._update_btn = Gtk.Button(label=_("Atualizar"))
         self._update_btn.add_css_class("suggested-action")
         self._update_btn.connect("clicked", self._on_update_clicked)
 
@@ -127,7 +128,7 @@ class UpdateDialog(Adw.Dialog):
 
         self._status_box.set_visible(True)
         self._spinner.start()
-        self._set_status("Baixando atualização…")
+        self._set_status(_("Baixando atualização…"))
 
         self._checker.download_and_open(
             self._release,
@@ -146,7 +147,7 @@ class UpdateDialog(Adw.Dialog):
     def _on_progress(self, downloaded: int, total: int) -> bool:
         if total > 0:
             pct = int(downloaded * 100 / total)
-            GLib.idle_add(self._set_status, f"Baixando… {pct}%")
+            GLib.idle_add(self._set_status, _("Baixando… {percent}%").format(percent=pct))
         return False
 
     def _on_status(self, message: str) -> bool:
@@ -167,11 +168,11 @@ class UpdateDialog(Adw.Dialog):
         self._spinner.stop()
         self._status_box.set_visible(False)
         self._body.set_text(
-            "POR.ai atualizado com sucesso! "
-            "Reinicie o aplicativo para usar a nova versão."
+            _("POR.ai atualizado com sucesso! "
+              "Reinicie o aplicativo para usar a nova versão.")
         )
         self._update_btn.set_visible(False)
-        self._later_btn.set_label("Fechar")
+        self._later_btn.set_label(_("Fechar"))
         self._later_btn.set_sensitive(True)
         self.set_can_close(True)
         return False
@@ -179,10 +180,10 @@ class UpdateDialog(Adw.Dialog):
     def _finish_error(self, message: str) -> bool:
         self._spinner.stop()
         self._status_box.set_visible(False)
-        self._body.set_text(f"Erro ao atualizar: {message}")
-        self._update_btn.set_label("Tentar de novo")
+        self._body.set_text(_("Erro ao atualizar: {error}").format(error=message))
+        self._update_btn.set_label(_("Tentar de novo"))
         self._update_btn.set_sensitive(True)
-        self._later_btn.set_label("Fechar")
+        self._later_btn.set_label(_("Fechar"))
         self._later_btn.set_sensitive(True)
         self.set_can_close(True)
         self._busy = False

@@ -1,0 +1,16 @@
+# Dependências Python do POR.ai para o Flatpak.
+#
+# Só as dependências DIRETAS do app ficam aqui; as transitivas (urllib3, numpy,
+# et-xmlfile…) são resolvidas pelo gerar_yaml.py, que grava o
+# python3-requirements.yaml com URL + sha256 de cada arquivo.
+#
+# PyGObject e pycairo NÃO entram: já vêm no runtime org.gnome.Platform.
+#
+# Depois de mudar qualquer versão:  python3 gerar_yaml.py
+
+requests==2.34.2      # core/openrouter.py, core/updater.py
+pypdf==6.19.0         # anexos PDF
+openpyxl==3.1.5       # planilhas .xlsx
+odfpy==1.4.1          # planilhas .ods e anexos .odt (defusedxml: ver EXTRA_DEPS no gerar_yaml.py)
+matplotlib==3.11.2    # gráficos embutidos nas planilhas (traz numpy)
+pillow==12.3.0        # openpyxl.drawing.image precisa do PIL para embutir o gráfico

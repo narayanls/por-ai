@@ -54,6 +54,7 @@ except ImportError:
 # matplotlib, os dois formatos continuam gerando normalmente, só sem a
 # imagem do gráfico embutida.
 from core import chart_gen
+from core.i18n import _
 
 
 # ── Estilo de fallback ───────────────────────────────────────────────────────
@@ -203,8 +204,8 @@ def _parse_spec(
              for key, default in _DEFAULT_STYLE.items()}
 
     sheet_name = spec.get("sheet_name")
-    sheet_name = str(sheet_name)[:31] if sheet_name else "Planilha"
-    sheet_name = _RE_BAD_SHEET_NAME.sub("-", sheet_name) or "Planilha"
+    sheet_name = str(sheet_name)[:31] if sheet_name else _("Planilha")
+    sheet_name = _RE_BAD_SHEET_NAME.sub("-", sheet_name) or _("Planilha")
 
     # Chave opcional: só é usada se vier um dict válido. Qualquer outra
     # coisa (string, lista, ausente) é tratada como "sem gráfico" em vez

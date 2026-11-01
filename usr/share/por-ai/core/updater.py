@@ -25,6 +25,7 @@ import subprocess
 import tempfile
 import threading
 from typing import Any, Callable, Dict, Optional, Tuple
+from core.i18n import _
 
 logger = logging.getLogger(__name__)
 
@@ -219,21 +220,21 @@ def fetch_latest_release(timeout: int = 10) -> Dict[str, Any]:
             import datetime
             try:
                 when = datetime.datetime.fromtimestamp(int(reset))
-                quando = f" Tente novamente após {when:%H:%M}."
+                quando = " " + _("Tente novamente após {time}.").format(time=f"{when:%H:%M}")
             except (ValueError, OSError):
                 quando = ""
             raise RuntimeError(
-                "Limite de requisições do GitHub atingido "
-                f"(60/hora por IP).{quando}"
+                _("Limite de requisições do GitHub atingido "
+                  "(60/hora por IP).") + quando
             )
         raise RuntimeError(
-            "GitHub recusou a requisição (HTTP 403) — possível limite de "
-            "requisições ou User-Agent bloqueado."
+            _("GitHub recusou a requisição (HTTP 403) — possível limite de "
+              "requisições ou User-Agent bloqueado.")
         )
 
     if response.status_code != 200:
         raise RuntimeError(
-            f"GitHub respondeu HTTP {response.status_code}."
+            _("GitHub respondeu HTTP {status}.").format(status=response.status_code)
         )
     return response.json()
 
@@ -350,37 +351,149 @@ def _install_flatpak_bundle(
     funciona como atualização (mesma origem, novo commit).
     """
     if not shutil.which("flatpak-spawn"):
-        return False, "flatpak-spawn não encontrado dentro da sandbox."
+        return False, _("flatpak-spawn não encontrado dentro da sandbox.")
 
     scope = _flatpak_scope()
-    argv = [
-        "flatpak-spawn", "--host",
-        "flatpak", "install", scope, "--noninteractive", "-y", "--bundle", path,
-    ]
+    # IMPORTANTE: NÃO usar --noninteractive no escopo --system. Essa flag faz
+    # o flatpak-system-helper consultar o polkit SEM permitir interação
+    # (POLKIT_CHECK_AUTHORIZATION_FLAGS_NONE). Como a ação
+    # org.freedesktop.Flatpak.install-bundle exige senha de admin, o polkit
+    # nega na hora — sem abrir a janela de senha — e o helper responde
+    # "Flatpak system operation InstallBundle not allowed for user".
+    # O -y já basta para não haver perguntas no terminal.
+    argv = ["flatpak-spawn", "--host", "flatpak", "install", scope, "-y"]
+    if scope == "--user":
+        argv.append("--noninteractive")  # --user não passa pelo polkit
+    argv += ["--bundle", path]
+
     if on_status:
         on_status(
-            "Instalando… confirme a senha de administrador se o sistema pedir."
-            if scope == "--system" else "Instalando a nova versão…"
+            _("Instalando… confirme a senha de administrador na janela do sistema.")
+            if scope == "--system" else _("Instalando a nova versão…")
         )
     print(f"[POR.ai] Instalando via flatpak: {' '.join(argv)}", flush=True)
     try:
         proc = subprocess.run(argv, capture_output=True, text=True)
     except Exception as exc:  # pylint: disable=broad-except
-        return False, f"Falha ao iniciar o flatpak: {exc}"
+        return False, _("Falha ao iniciar o flatpak: {error}").format(error=exc)
 
     if proc.returncode == 0:
         return True, ""
 
-    output = (proc.stderr or proc.stdout or "").strip()
-    if "org.freedesktop.Flatpak" in output:
+    output = "\n".join(
+        part.strip() for part in (proc.stderr, proc.stdout) if part and part.strip()
+    )
+    print(f"[POR.ai] flatpak falhou ({proc.returncode}):\n{output}", flush=True)
+
+    if "org.freedesktop.Flatpak" in output and "not allowed" not in output:
         # flatpak-spawn não conseguiu falar com o host.
         return False, (
-            "Este Flatpak não tem permissão para instalar atualizações "
-            "(falta --talk-name=org.freedesktop.Flatpak). Baixe o arquivo "
-            ".flatpak na página de releases e instale manualmente."
+            _("Este Flatpak não tem permissão para instalar atualizações "
+              "(falta --talk-name=org.freedesktop.Flatpak). Baixe o arquivo "
+              ".flatpak na página de releases e instale manualmente.")
         )
-    detail = output.splitlines()[-1] if output else ""
-    return False, detail or f"flatpak retornou código {proc.returncode}."
+
+    if scope == "--system" and _looks_like_auth_failure(output):
+        # Sem agente polkit gráfico alcançável (ou senha negada): tenta num
+        # terminal do host, onde o próprio `flatpak` registra um agente de
+        # texto e pede a senha ali.
+        ok, msg = _install_flatpak_bundle_in_terminal(path, scope, on_status)
+        if ok:
+            return True, ""
+        manual = f"flatpak install {scope} --bundle {shlex.quote(path)}"
+        return False, msg or (
+            _("O sistema não autorizou a instalação. Instale manualmente com:")
+            + "\n" + manual
+        )
+
+    return False, _flatpak_error_detail(output) or (
+        _("flatpak retornou código {code}.").format(code=proc.returncode)
+    )
+
+
+def _flatpak_error_detail(output: str) -> str:
+    """Escolhe a linha útil da saída do flatpak.
+
+    O flatpak às vezes imprime avisos internos da GLib (GLib-CRITICAL,
+    Gtk-WARNING…) depois da mensagem de erro real; pegar só a última linha
+    mostrava esses avisos no diálogo em vez do motivo da falha.
+    """
+    lines = [
+        ln.strip() for ln in output.splitlines()
+        if ln.strip() and not re.search(r"\b\w+-(CRITICAL|WARNING|DEBUG)\b", ln)
+    ]
+    for ln in reversed(lines):
+        if re.match(r"(?i)^(error|erro)\b", ln):
+            return ln
+    return lines[-1] if lines else ""
+
+
+def _looks_like_auth_failure(output: str) -> bool:
+    low = output.lower()
+    return any(s in low for s in (
+        "not allowed for user", "not authorized", "authorization",
+        "g_propagate_error",  # recusa do polkit em versões antigas do flatpak
+    ))
+
+
+def _host_terminal() -> Optional[Tuple[str, str]]:
+    """Como _find_terminal, mas procurando no HOST (fora da sandbox)."""
+    candidates = [
+        ("gnome-terminal", "--"), ("ptyxis", "--"), ("kgx", "--"),
+        ("konsole", "-e"), ("xfce4-terminal", "-x"), ("mate-terminal", "-x"),
+        ("tilix", "-e"), ("alacritty", "-e"), ("kitty", "-e"), ("xterm", "-e"),
+    ]
+    for cmd, flag in candidates:
+        try:
+            proc = subprocess.run(
+                ["flatpak-spawn", "--host", "which", cmd],
+                capture_output=True, timeout=5,
+            )
+        except Exception:  # pylint: disable=broad-except
+            return None
+        if proc.returncode == 0:
+            return cmd, flag
+    return None
+
+
+def _install_flatpak_bundle_in_terminal(
+    path: str,
+    scope: str,
+    on_status: Optional[Callable[[str], None]] = None,
+) -> Tuple[bool, str]:
+    term = _host_terminal()
+    if term is None:
+        return False, ""
+    cmd, flag = term
+    # A sentinela fica na mesma pasta do bundle (cache do app), que tem o
+    # mesmo caminho dentro e fora da sandbox.
+    sentinel = path + ".ok"
+    try:
+        os.remove(sentinel)
+    except OSError:
+        pass
+    inner = (
+        f"flatpak install {scope} -y --bundle {shlex.quote(path)}"
+        f" && touch {shlex.quote(sentinel)}; "
+        "echo; read -n1 -r -p "
+        + shlex.quote(_("Pressione qualquer tecla para fechar…"))
+    )
+    if on_status:
+        on_status(_("Instalando… digite sua senha no terminal que abriu."))
+    argv = ["flatpak-spawn", "--host", cmd, flag, "bash", "-c", inner]
+    if cmd == "gnome-terminal":
+        argv.insert(3, "--wait")  # senão o comando retorna na hora
+    try:
+        subprocess.run(argv)
+    except Exception as exc:  # pylint: disable=broad-except
+        return False, _("Falha ao abrir o terminal: {error}").format(error=exc)
+    if os.path.exists(sentinel):
+        try:
+            os.remove(sentinel)
+        except OSError:
+            pass
+        return True, ""
+    return False, _("A instalação não foi concluída (verifique o terminal).")
 
 
 def install_package(
@@ -402,14 +515,13 @@ def install_package(
 
     argv = _install_argv(system, path)
     if argv is None:
-        return False, "Sistema não suportado para instalação automática."
+        return False, _("Sistema não suportado para instalação automática.")
 
     # 1) pkexec: janela gráfica de senha e código de saída confiável.
     if shutil.which("pkexec"):
         if on_status:
             on_status(
-                "Instalando… confirme a senha de administrador na "
-                "janela do sistema."
+                _("Instalando… confirme a senha de administrador na janela do sistema.")
             )
         print(f"[POR.ai] Instalando via pkexec: {' '.join(argv)}", flush=True)
         try:
@@ -419,18 +531,18 @@ def install_package(
                 text=True,
             )
         except Exception as exc:  # pylint: disable=broad-except
-            return False, f"Falha ao iniciar o instalador: {exc}"
+            return False, _("Falha ao iniciar o instalador: {error}").format(error=exc)
 
         if proc.returncode == 0:
             return True, ""
         if proc.returncode == 126:
-            return False, "Autenticação cancelada pelo usuário."
+            return False, _("Autenticação cancelada pelo usuário.")
         if proc.returncode != 127:
             # 127 = pkexec não conseguiu autorizar/executar → tenta terminal.
             # Qualquer outro código é erro real do pacman/apt.
             detail = (proc.stderr or proc.stdout or "").strip()
             detail = detail.splitlines()[-1] if detail else ""
-            return False, detail or f"Instalador retornou código {proc.returncode}."
+            return False, detail or _("Instalador retornou código {code}.").format(code=proc.returncode)
 
     # 2) Fallback: abre um terminal e roda com sudo, usando um arquivo
     #    sentinela para detectar sucesso (o código de saída do terminal não
@@ -439,8 +551,8 @@ def install_package(
     if term is None:
         manual = "sudo " + " ".join(shlex.quote(a) for a in argv)
         return False, (
-            "Não foi possível instalar automaticamente (sem pkexec nem "
-            f"terminal). Instale manualmente com:\n{manual}"
+            _("Não foi possível instalar automaticamente (sem pkexec nem "
+              "terminal). Instale manualmente com:") + "\n" + manual
         )
 
     cmd, flag = term
@@ -456,15 +568,18 @@ def install_package(
     inner = (
         "sudo " + " ".join(shlex.quote(a) for a in argv)
         + f" && touch {shlex.quote(sentinel)}; "
-        + "echo; read -n1 -r -p 'Instalação finalizada. "
-        + "Pressione qualquer tecla para fechar…'"
+        + "echo; read -n1 -r -p "
+        + shlex.quote(
+            _("Instalação finalizada.") + " "
+            + _("Pressione qualquer tecla para fechar…")
+        )
     )
     if on_status:
-        on_status("Instalando… digite sua senha no terminal que abriu.")
+        on_status(_("Instalando… digite sua senha no terminal que abriu."))
     try:
         subprocess.run([cmd, flag, "bash", "-c", inner])
     except Exception as exc:  # pylint: disable=broad-except
-        return False, f"Falha ao abrir o terminal: {exc}"
+        return False, _("Falha ao abrir o terminal: {error}").format(error=exc)
 
     if os.path.exists(sentinel):
         try:
@@ -472,7 +587,7 @@ def install_package(
         except OSError:
             pass
         return True, ""
-    return False, "A instalação não foi concluída (verifique o terminal)."
+    return False, _("A instalação não foi concluída (verifique o terminal).")
 
 
 # ── Verificação completa (roda em thread) ─────────────────────────────────────
@@ -606,8 +721,8 @@ class UpdateChecker:
         if not url:
             if on_error:
                 on_error(
-                    f"Nenhum pacote encontrado para este sistema "
-                    f"({_asset_suffix(self._system)})."
+                    _("Nenhum pacote encontrado para este sistema "
+                      "({suffix}).").format(suffix=_asset_suffix(self._system))
                 )
             return
 

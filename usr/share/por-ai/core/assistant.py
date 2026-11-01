@@ -89,6 +89,7 @@ from core.sheet_gen import (
     build_sheet,
     capabilities_prompt,
 )
+from core.i18n import _
 
 
 # ── Extensões suportadas ──────────────────────────────────────────────────────
@@ -379,15 +380,15 @@ class ChatAssistant:
         if "endpoint" not in lowered and "data policy" not in lowered:
             return message
         level = (
-            "retenção zero"
+            _("retenção zero")
             if self.config.privacy_filter == "zdr"
-            else "sem treino com os seus dados"
+            else _("sem treino com os seus dados")
         )
-        return (
-            f"{message}\n\nNenhum provedor deste modelo atende ao filtro de "
-            f"privacidade ({level}). Escolha outro modelo ou afrouxe o filtro "
-            "em Preferências ▸ OpenRouter ▸ Privacidade."
-        )
+        return message + "\n\n" + _(
+            "Nenhum provedor deste modelo atende ao filtro de privacidade "
+            "({level}). Escolha outro modelo ou afrouxe o filtro em "
+            "Preferências ▸ OpenRouter ▸ Privacidade."
+        ).format(level=level)
 
     @staticmethod
     def _extract_limits(
@@ -595,13 +596,13 @@ class ChatAssistant:
             maritaca = is_maritaca_model(model)
             if maritaca and not self.config.has_maritaca_key:
                 raise OpenRouterError(
-                    "Configure a chave da API da Maritaca em Preferências para "
-                    f"usar o modelo {model}."
+                    _("Configure a chave da API da Maritaca em Preferências "
+                      "para usar o modelo {model}.").format(model=model)
                 )
             if not maritaca and not self.config.has_openrouter_key:
                 raise OpenRouterError(
-                    "Configure a chave da API do OpenRouter em Preferências para "
-                    f"usar o modelo {model}."
+                    _("Configure a chave da API do OpenRouter em Preferências "
+                      "para usar o modelo {model}.").format(model=model)
                 )
             client = self._build_client(model)
             messages = self._inject_capabilities(messages)
@@ -612,23 +613,23 @@ class ChatAssistant:
                     # A pesquisa é uma server tool do OpenRouter; a API da
                     # Maritaca não a executa.
                     raise OpenRouterError(
-                        "A pesquisa na web só está disponível nos modelos do "
-                        "OpenRouter. Desative o botão de pesquisa ou escolha "
-                        "outro modelo."
+                        _("A pesquisa na web só está disponível nos modelos do "
+                          "OpenRouter. Desative o botão de pesquisa ou escolha "
+                          "outro modelo.")
                     )
                 if self._is_image_model(model):
                     # Modelos de imagem não usam ferramentas; a busca seria
                     # ignorada ou recusada pelo provedor.
                     raise OpenRouterError(
-                        "A pesquisa na web não funciona com modelos de geração "
-                        "de imagem. Desative o botão de pesquisa e envie de novo."
+                        _("A pesquisa na web não funciona com modelos de geração "
+                          "de imagem. Desative o botão de pesquisa e envie de novo.")
                     )
                 supports = self._model_supports_tools(self._get_model_entry(client, model))
                 if supports is False:
                     raise OpenRouterError(
-                        f"O modelo {model} não aceita ferramentas (tools), então "
-                        "não consegue usar a pesquisa na web. Escolha outro "
-                        "modelo ou desative o botão de pesquisa."
+                        _("O modelo {model} não aceita ferramentas (tools), então "
+                          "não consegue usar a pesquisa na web. Escolha outro "
+                          "modelo ou desative o botão de pesquisa.").format(model=model)
                     )
                 extra["tools"] = [web_search_tool(self._WEB_SEARCH_MAX_RESULTS)]
                 messages = self._append_to_last_user(messages, self._WEB_SEARCH_HINT)
@@ -742,7 +743,7 @@ class ChatAssistant:
                     step = 0.2
                     while waited < delay:
                         if self._cancel.is_set():
-                            raise OpenRouterError("Cancelado pelo usuário.") from exc
+                            raise OpenRouterError(_("Cancelado pelo usuário.")) from exc
                         time.sleep(step)
                         waited += step
                     continue
@@ -834,7 +835,7 @@ class ChatAssistant:
                     errors.append(f"Maritaca: {exc}")
 
             if openrouter_ids is None and maritaca_ids is None:
-                GLib.idle_add(on_error, "\n".join(errors) or "Nenhum provedor configurado.")
+                GLib.idle_add(on_error, "\n".join(errors) or _("Nenhum provedor configurado."))
                 return
             for message in errors:
                 logger.warning("Atualização parcial do catálogo: %s", message)
@@ -877,8 +878,8 @@ class ChatAssistant:
             zdr_ids = client.list_zdr_model_ids()
         except OpenRouterError as exc:
             raise OpenRouterError(
-                "Não foi possível obter a lista de provedores com retenção "
-                f"zero, então o catálogo não foi atualizado: {exc}",
+                _("Não foi possível obter a lista de provedores com retenção "
+                  "zero, então o catálogo não foi atualizado: {error}").format(error=exc),
                 retryable=exc.retryable,
             ) from exc
         return [i for i in ids if i in zdr_ids or i in cls._ZDR_ALWAYS_KEEP]
@@ -919,16 +920,16 @@ class ChatAssistant:
     def unsupported_reason(path: str) -> str:
         ext = os.path.splitext(path)[1].lower()
         if ext == ".pdf" and not PDF_AVAILABLE:
-            return "Instale python3-pypdf para anexar PDFs."
+            return _("Instale python3-pypdf para anexar PDFs.")
         if ext == ".odt" and not ODT_AVAILABLE:
-            return "Instale python3-odfpy para anexar arquivos ODT."
+            return _("Instale python3-odfpy para anexar arquivos ODT.")
         if ext == ".ods" and not ODT_AVAILABLE:
-            return "Instale python3-odfpy para anexar arquivos ODS."
+            return _("Instale python3-odfpy para anexar arquivos ODS.")
         if ext == ".xlsx" and not XLSX_AVAILABLE:
-            return "Instale python3-openpyxl para anexar arquivos XLSX."
+            return _("Instale python3-openpyxl para anexar arquivos XLSX.")
         if ext == ".docx":
-            return "Arquivos .docx não são suportados. Converta para .odt ou .txt."
-        return "Tipo de arquivo não suportado."
+            return _("Arquivos .docx não são suportados. Converta para .odt ou .txt.")
+        return _("Tipo de arquivo não suportado.")
 
     @staticmethod
     def read_text_attachment(path: str) -> str:
@@ -946,7 +947,7 @@ class ChatAssistant:
             with open(path, "r", encoding="utf-8", errors="replace") as f:
                 text = f.read()
         except OSError as exc:
-            raise RuntimeError(f"Erro ao ler arquivo: {exc}") from exc
+            raise RuntimeError(_("Erro ao ler arquivo: {error}").format(error=exc)) from exc
         if ext in _SVG_EXTENSIONS:
             text = ChatAssistant._strip_svg_data_uris(text)
         return text
@@ -989,7 +990,7 @@ class ChatAssistant:
         Lê uma imagem e devolve o bloco multimodal para a API:
         {"type": "image_url", "image_url": {"url": "data:<mime>;base64,..."}}
         """
-        guessed, _ = mimetypes.guess_type(path)
+        guessed, _encoding = mimetypes.guess_type(path)
         if not guessed:
             ext = os.path.splitext(path)[1].lower().lstrip(".")
             # jpg → jpeg para compatibilidade com o padrão MIME
@@ -999,7 +1000,7 @@ class ChatAssistant:
             with open(path, "rb") as f:
                 raw = f.read()
         except OSError as exc:
-            raise RuntimeError(f"Erro ao ler imagem: {exc}") from exc
+            raise RuntimeError(_("Erro ao ler imagem: {error}").format(error=exc)) from exc
         # A extensão é só um palpite; os bytes reais mandam.
         mime = ChatAssistant._sniff_mime(raw, guessed)
         data = base64.b64encode(raw).decode("ascii")
@@ -1042,8 +1043,8 @@ class ChatAssistant:
         """
         if not SVG_RASTER_AVAILABLE:
             raise RuntimeError(
-                "Rasterização de SVG indisponível (falta o loader de SVG da "
-                "librsvg para o gdk-pixbuf)."
+                _("Rasterização de SVG indisponível (falta o loader de SVG da "
+                  "librsvg para o gdk-pixbuf).")
             )
         size = ChatAssistant._SVG_RASTER_SIZE
         try:
@@ -1059,9 +1060,9 @@ class ChatAssistant:
                 )
             ok, data = pixbuf.save_to_bufferv("png", [], [])
         except Exception as exc:  # GLib.Error, SVG malformado etc.
-            raise RuntimeError(f"Erro ao rasterizar SVG: {exc}") from exc
+            raise RuntimeError(_("Erro ao rasterizar SVG: {error}").format(error=exc)) from exc
         if not ok or not data:
-            raise RuntimeError("Erro ao rasterizar SVG: PNG vazio.")
+            raise RuntimeError(_("Erro ao rasterizar SVG: PNG vazio."))
         encoded = base64.b64encode(bytes(data)).decode("ascii")
         return {
             "type": "image_url",
@@ -1124,7 +1125,7 @@ class ChatAssistant:
             match = ChatAssistant._RE_DATA_URI.match(url)
             if not match:
                 if url.startswith(("http://", "https://")):
-                    links.append(f"[Imagem gerada]({url})")
+                    links.append(f"[{_('Imagem gerada')}]({url})")
                 continue
             mime, b64data = match.group(1), match.group(2)
             ext = mimetypes.guess_extension(mime) or ".png"
@@ -1141,7 +1142,7 @@ class ChatAssistant:
                     f.write(raw)
             except OSError:
                 continue
-            links.append(f"[Imagem gerada]({GLib.filename_to_uri(path, None)})")
+            links.append(f"[{_('Imagem gerada')}]({GLib.filename_to_uri(path, None)})")
         return "\n".join(links)
 
     @staticmethod
@@ -1212,7 +1213,7 @@ class ChatAssistant:
                 logger.info("Falha ao gerar planilha: %s", exc)
                 return match.group(0)
             uri = GLib.filename_to_uri(path, None)
-            return f"[Baixar planilha (.{fmt})]({uri})"
+            return "[" + _("Baixar planilha (.{ext})").format(ext=fmt) + f"]({uri})"
 
         def _save_csv(match: re.Match) -> str:
             content = match.group(1).strip()
@@ -1226,7 +1227,7 @@ class ChatAssistant:
                 logger.info("Falha ao gravar planilha csv: %s", exc)
                 return match.group(0)
             uri = GLib.filename_to_uri(path, None)
-            return f"[Baixar planilha (.csv)]({uri})"
+            return "[" + _("Baixar planilha (.{ext})").format(ext="csv") + f"]({uri})"
 
         text = ChatAssistant._RE_SHEET_BLOCK.sub(_save_sheet, text)
         return ChatAssistant._RE_CSV_BLOCK.sub(_save_csv, text)
@@ -1238,24 +1239,24 @@ class ChatAssistant:
     @staticmethod
     def _read_pdf(path: str) -> str:
         if not PDF_AVAILABLE:
-            raise RuntimeError("Instale python3-pypdf para ler PDFs.")
+            raise RuntimeError(_("Instale python3-pypdf para ler PDFs."))
         try:
             reader = PdfReader(path)
             parts = [p.extract_text() for p in reader.pages if p.extract_text()]
             text = "\n".join(parts)
         except Exception as exc:
-            raise RuntimeError(f"Erro ao ler PDF: {exc}") from exc
+            raise RuntimeError(_("Erro ao ler PDF: {error}").format(error=exc)) from exc
         if not text.strip():
             raise RuntimeError(
-                "Não foi possível extrair texto do PDF "
-                "(pode ser imagem ou estar vazio)."
+                _("Não foi possível extrair texto do PDF "
+                  "(pode ser imagem ou estar vazio).")
             )
         return text
 
     @staticmethod
     def _read_odt(path: str) -> str:
         if not ODT_AVAILABLE:
-            raise RuntimeError("Instale python3-odfpy para ler ODT.")
+            raise RuntimeError(_("Instale python3-odfpy para ler ODT."))
         try:
             doc = odf_load(path)
             paragraphs = doc.getElementsByType(P)
@@ -1269,12 +1270,12 @@ class ChatAssistant:
                 lines.append(text)
             return "\n".join(lines)
         except Exception as exc:
-            raise RuntimeError(f"Erro ao ler ODT: {exc}") from exc
+            raise RuntimeError(_("Erro ao ler ODT: {error}").format(error=exc)) from exc
 
     @staticmethod
     def _read_ods(path: str) -> str:
         if not ODT_AVAILABLE:
-            raise RuntimeError("Instale python3-odfpy para ler arquivos ODS.")
+            raise RuntimeError(_("Instale python3-odfpy para ler arquivos ODS."))
         try:
             from odf.table import Table, TableRow, TableCell
             doc = odf_load(path)
@@ -1292,7 +1293,7 @@ class ChatAssistant:
                     lines.append("\t".join(cells))
             return "\n".join(lines)
         except Exception as exc:
-            raise RuntimeError(f"Erro ao ler ODS: {exc}") from exc
+            raise RuntimeError(_("Erro ao ler ODS: {error}").format(error=exc)) from exc
 
     @staticmethod
     def _read_xlsx(path: str) -> str:
@@ -1300,7 +1301,7 @@ class ChatAssistant:
         planilha. ``data_only=True`` traz o resultado das fórmulas em vez da
         fórmula em si — é o que interessa ao modelo."""
         if not XLSX_AVAILABLE:
-            raise RuntimeError("Instale python3-openpyxl para ler arquivos XLSX.")
+            raise RuntimeError(_("Instale python3-openpyxl para ler arquivos XLSX."))
         try:
             workbook = load_workbook(path, data_only=True, read_only=True)
             blocks = []
@@ -1316,7 +1317,7 @@ class ChatAssistant:
                     blocks.append(f"# {sheet.title}\n" + "\n".join(lines))
             workbook.close()
         except Exception as exc:
-            raise RuntimeError(f"Erro ao ler XLSX: {exc}") from exc
+            raise RuntimeError(_("Erro ao ler XLSX: {error}").format(error=exc)) from exc
         if not blocks:
-            raise RuntimeError("A planilha está vazia.")
+            raise RuntimeError(_("A planilha está vazia."))
         return "\n\n".join(blocks)

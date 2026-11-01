@@ -1,0 +1,116 @@
+id: io.github.narayanls.PorAi
+runtime: org.gnome.Platform
+# 50 usa a mesma base do 49 (freedesktop-sdk 25.08, Python 3.13) e ainda recebe
+# atualizações. Se mudar para o 51, a base passa a ser a 26.08: confira o Python
+# do SDK e ajuste PYTHON_VERSION no gerar_yaml.py antes de regenerar o YAML.
+runtime-version: "50"
+sdk: org.gnome.Sdk
+command: por-ai
+
+# Mantém as traduções (ex.: menu do corretor da libspelling) dentro do próprio
+# app em vez de separá-las na extensão .Locale — assim um bundle .flatpak de
+# arquivo único já sai completo.
+separate-locales: false
+
+finish-args:
+  - --share=ipc
+  - --socket=wayland
+  - --socket=fallback-x11
+  - --device=dri
+  # API do OpenRouter
+  - --share=network
+  # Ícone na bandeja (ui/tray.py): fala com o watcher e registra o nome
+  # org.kde.StatusNotifierItem-<pid>-1 no barramento da sessão.
+  - --talk-name=org.kde.StatusNotifierWatcher
+  - --own-name=org.kde.*
+  # Atualização pelo próprio app (core/updater.py): roda `flatpak install
+  # --bundle` no host via flatpak-spawn. Atenção: esta permissão deixa o app
+  # executar qualquer comando fora da sandbox.
+  - --talk-name=org.freedesktop.Flatpak
+  # Sem --filesystem: anexos (botão e arrastar-e-soltar) chegam pelos portais,
+  # e conversas/imagens/planilhas ficam em ~/.var/app/io.github.narayanls.PorAi/.
+  # Se o seletor de arquivos abrir mostrando só a sandbox (sessão sem
+  # xdg-desktop-portal com backend de FileChooser), descomente:
+  # - --filesystem=home:ro
+
+cleanup:
+  - /include
+  - /lib/pkgconfig
+  - /share/man
+  - /share/doc
+  - /share/gir-1.0
+  - "*.a"
+  - "*.la"
+
+modules:
+  # requests, pypdf, openpyxl, odfpy, matplotlib, pillow (gerado pelo gerar_yaml.py)
+  - python3-requirements.yaml
+
+  # Corretor ortográfico. gtksourceview5 e enchant já vêm no runtime; a
+  # libspelling não, então é compilada aqui (mesma versão do GNOME 50).
+  - name: libspelling
+    buildsystem: meson
+    config-opts:
+      - -Ddocs=false
+      - -Dsysprof=false
+      - -Dvapi=false
+    sources:
+      - type: archive
+        url: https://download.gnome.org/sources/libspelling/0.4/libspelling-0.4.10.tar.xz
+        sha256: 56e3f01a3a18b575beea4c34349f99cdaba316e1f7c271b1231f7bcf5d9af73b
+
+  # Dicionário pt_BR (equivalente ao hunspell-pt-br do PKGBUILD). O app cria o
+  # corretor travado em "pt_BR"; o enchant procura em $XDG_DATA_DIRS/hunspell,
+  # e /app/share faz parte desse caminho dentro do Flatpak.
+  - name: hunspell-pt-br
+    buildsystem: simple
+    build-commands:
+      - install -Dm644 pt_BR.aff /app/share/hunspell/pt_BR.aff
+      - install -Dm644 pt_BR.dic /app/share/hunspell/pt_BR.dic
+    sources:
+      - type: file
+        url: https://raw.githubusercontent.com/LibreOffice/dictionaries/libreoffice-26.8.1.1/pt_BR/pt_BR.aff
+        sha256: 21d8ad2a769a60e17e2b5ea4ef11d4d593a58b9e2a82d642ef82d6a4c5523865
+      - type: file
+        url: https://raw.githubusercontent.com/LibreOffice/dictionaries/libreoffice-26.8.1.1/pt_BR/pt_BR.dic
+        sha256: a38bfb26b68ece2834e79fe83e48d5792652970ace12db89d1b9674bf9933183
+
+  - name: por-ai
+    buildsystem: simple
+    build-commands:
+      # Código do app (sem os __pycache__ gerados rodando em dev)
+      - mkdir -p /app/bin /app/share/por-ai
+      - cp -r share/por-ai/. /app/share/por-ai/
+      - find /app/share/por-ai -type d -name '__pycache__' -prune -exec rm -rf {} +
+
+      # Versão que o core/updater.py compara com a release do GitHub: sai do
+      # <release> mais recente do metainfo (o mesmo valor que aparece em
+      # `flatpak info`). Atualize o metainfo com o sync_metainfo_version.py
+      # ANTES de rodar o flatpak-builder.
+      - |
+        python3 -c "import xml.etree.ElementTree as ET; print('v' + ET.parse('share/metainfo/io.github.narayanls.PorAi.metainfo.xml').find('releases/release').get('version'))" > /app/share/por-ai/version.txt
+
+      # /app é somente leitura em execução: compila o bytecode agora
+      - python3 -m compileall -q /app/share/por-ai
+
+      # .desktop — o Flatpak só exporta ícones cujo nome começa com o ID do app
+      - install -Dm644 share/applications/io.github.narayanls.PorAi.desktop /app/share/applications/io.github.narayanls.PorAi.desktop
+      - sed -i 's/^Icon=.*/Icon=io.github.narayanls.PorAi/' /app/share/applications/io.github.narayanls.PorAi.desktop
+
+      # Ícone: com o ID (exportado para o sistema) e como "por-ai" (nome que o
+      # código usa na janela Sobre e na bandeja)
+      - install -Dm644 share/icons/hicolor/scalable/apps/por-ai.svg /app/share/icons/hicolor/scalable/apps/io.github.narayanls.PorAi.svg
+      - install -Dm644 share/icons/hicolor/scalable/apps/por-ai.svg /app/share/icons/hicolor/scalable/apps/por-ai.svg
+
+      # Metainfo para catálogos Flatpak/AppStream
+      - install -Dm644 share/metainfo/io.github.narayanls.PorAi.metainfo.xml /app/share/metainfo/io.github.narayanls.PorAi.metainfo.xml
+
+      # Cria o executável (o usr/bin/por-ai do repo aponta para /usr/share)
+      - |
+        echo '#!/bin/sh' > /app/bin/por-ai
+        echo 'exec python3 /app/share/por-ai/main.py "$@"' >> /app/bin/por-ai
+        chmod +x /app/bin/por-ai
+
+    sources:
+      - type: dir
+        path: usr

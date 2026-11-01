@@ -19,6 +19,7 @@ from typing import Any, Callable, Dict, List, Optional, Set, Tuple
 
 
 import requests
+from core.i18n import _
 
 logger = logging.getLogger(__name__)
 
@@ -67,7 +68,7 @@ class OpenRouterClient:
     BASE_URL = OPENROUTER_BASE
     PROVIDER_NAME = "OpenRouter"
     MODELS_PATH = "/models/user"
-    MISSING_KEY_MESSAGE = "Configure a chave da API OpenRouter em Preferências."
+    MISSING_KEY_MESSAGE = _("Configure a chave da API OpenRouter em Preferências.")
     # ``stream_options.include_usage`` faz parte da API da OpenAI e devolve o
     # uso de tokens no último pedaço do streaming.
     STREAM_INCLUDE_USAGE = True
@@ -146,14 +147,18 @@ class OpenRouterClient:
             )
         except requests.Timeout as exc:
             raise OpenRouterError(
-                f"Tempo de espera esgotado ao contatar {self.PROVIDER_NAME}: {exc}", retryable=True
+                _("Tempo de espera esgotado ao contatar {provider}: {error}").format(
+                    provider=self.PROVIDER_NAME, error=exc),
+                retryable=True,
             ) from exc
         except requests.ConnectionError as exc:
             raise OpenRouterError(
-                f"Falha de conexão com {self.PROVIDER_NAME}: {exc}", retryable=True
+                _("Falha de conexão com {provider}: {error}").format(
+                    provider=self.PROVIDER_NAME, error=exc),
+                retryable=True,
             ) from exc
         except requests.RequestException as exc:
-            raise OpenRouterError(f"Falha ao contatar {self.PROVIDER_NAME}: {exc}") from exc
+            raise OpenRouterError(_("Falha ao contatar {provider}: {error}").format(provider=self.PROVIDER_NAME, error=exc)) from exc
 
         # As APIs respondem em UTF-8; fixamos para o requests não assumir
         # ISO-8859-1 e gerar acentuação corrompida ("Ã§" no lugar de "ç").
@@ -164,7 +169,7 @@ class OpenRouterClient:
         try:
             payload = response.json()
         except ValueError as exc:
-            raise OpenRouterError(f"{self.PROVIDER_NAME} retornou JSON inválido.") from exc
+            raise OpenRouterError(_("{provider} retornou JSON inválido.").format(provider=self.PROVIDER_NAME)) from exc
 
         data = payload.get("data") if isinstance(payload, dict) else None
         return data if isinstance(data, list) else []
@@ -198,14 +203,18 @@ class OpenRouterClient:
             )
         except requests.Timeout as exc:
             raise OpenRouterError(
-                f"Tempo de espera esgotado ao contatar {self.PROVIDER_NAME}: {exc}", retryable=True
+                _("Tempo de espera esgotado ao contatar {provider}: {error}").format(
+                    provider=self.PROVIDER_NAME, error=exc),
+                retryable=True,
             ) from exc
         except requests.ConnectionError as exc:
             raise OpenRouterError(
-                f"Falha de conexão com {self.PROVIDER_NAME}: {exc}", retryable=True
+                _("Falha de conexão com {provider}: {error}").format(
+                    provider=self.PROVIDER_NAME, error=exc),
+                retryable=True,
             ) from exc
         except requests.RequestException as exc:
-            raise OpenRouterError(f"Falha ao contatar {self.PROVIDER_NAME}: {exc}") from exc
+            raise OpenRouterError(_("Falha ao contatar {provider}: {error}").format(provider=self.PROVIDER_NAME, error=exc)) from exc
 
         response.encoding = "utf-8"
 
@@ -214,11 +223,11 @@ class OpenRouterClient:
         try:
             data = response.json()
         except ValueError as exc:
-            raise OpenRouterError(f"{self.PROVIDER_NAME} retornou JSON inválido.") from exc
+            raise OpenRouterError(_("{provider} retornou JSON inválido.").format(provider=self.PROVIDER_NAME)) from exc
 
         choices = data.get("choices") or []
         if not choices:
-            raise OpenRouterError("O provedor retornou uma resposta vazia.")
+            raise OpenRouterError(_("O provedor retornou uma resposta vazia."))
         message = choices[0].get("message") if isinstance(choices[0], dict) else None
         content = message.get("content") if isinstance(message, dict) else None
         reasoning_field = message.get("reasoning") if isinstance(message, dict) else None
@@ -241,18 +250,19 @@ class OpenRouterClient:
         if not text and not image_urls:
             if finish_reason == "error":
                 raise OpenRouterError(
-                    "O modelo esgotou o limite de tokens pensando e não chegou a "
-                    "gerar a resposta final (finish_reason=error). Aumente o "
-                    "limite de tokens em Preferências, reduza o esforço de "
-                    "raciocínio, reduza o tamanho do prompt, ou tente um "
-                    "modelo com raciocínio menos verboso."
+                    _("O modelo esgotou o limite de tokens pensando e não chegou a "
+                      "gerar a resposta final (finish_reason=error). Aumente o "
+                      "limite de tokens em Preferências, reduza o esforço de "
+                      "raciocínio, reduza o tamanho do prompt, ou tente um "
+                      "modelo com raciocínio menos verboso.")
                 )
             if reasoning:
                 raise OpenRouterError(
-                    "O modelo só retornou raciocínio interno, sem uma resposta "
-                    f"final (finish_reason={finish_reason or 'desconhecido'})."
+                    _("O modelo só retornou raciocínio interno, sem uma resposta "
+                      "final (finish_reason={reason}).").format(
+                        reason=finish_reason or _("desconhecido"))
                 )
-            raise OpenRouterError("O provedor não retornou conteúdo utilizável.")
+            raise OpenRouterError(_("O provedor não retornou conteúdo utilizável."))
         return text, image_urls, usage, reasoning
 
     # ------------------------------------------------------------------ #
@@ -381,14 +391,18 @@ class OpenRouterClient:
                         collected_images.extend(delta_images)
         except requests.Timeout as exc:
             raise OpenRouterError(
-                f"Tempo de espera esgotado ao contatar {self.PROVIDER_NAME}: {exc}", retryable=True
+                _("Tempo de espera esgotado ao contatar {provider}: {error}").format(
+                    provider=self.PROVIDER_NAME, error=exc),
+                retryable=True,
             ) from exc
         except requests.ConnectionError as exc:
             raise OpenRouterError(
-                f"Falha de conexão com {self.PROVIDER_NAME}: {exc}", retryable=True
+                _("Falha de conexão com {provider}: {error}").format(
+                    provider=self.PROVIDER_NAME, error=exc),
+                retryable=True,
             ) from exc
         except requests.RequestException as exc:
-            raise OpenRouterError(f"Falha ao contatar {self.PROVIDER_NAME}: {exc}") from exc
+            raise OpenRouterError(_("Falha ao contatar {provider}: {error}").format(provider=self.PROVIDER_NAME, error=exc)) from exc
 
         timing["total"] = time.monotonic() - started
         self._debug_log(model, finish_reason, usage, timing=timing, provider=provider)
@@ -397,7 +411,7 @@ class OpenRouterClient:
         final_reasoning = "".join(collected_reasoning)
 
         if stream_error:
-            raise OpenRouterError(f"O provedor retornou um erro durante a geração: {stream_error}")
+            raise OpenRouterError(_("O provedor retornou um erro durante a geração: {error}").format(error=stream_error))
 
         if not final_text and not collected_images:
             if should_cancel is not None and should_cancel():
@@ -406,18 +420,19 @@ class OpenRouterClient:
                 return final_text, collected_images, usage, final_reasoning
             if finish_reason == "error":
                 raise OpenRouterError(
-                    "O modelo esgotou o limite de tokens pensando e não chegou a "
-                    "gerar a resposta final (finish_reason=error). Aumente o "
-                    "limite de tokens em Preferências, reduza o esforço de "
-                    "raciocínio, reduza o tamanho do prompt, ou tente um "
-                    "modelo com raciocínio menos verboso."
+                    _("O modelo esgotou o limite de tokens pensando e não chegou a "
+                      "gerar a resposta final (finish_reason=error). Aumente o "
+                      "limite de tokens em Preferências, reduza o esforço de "
+                      "raciocínio, reduza o tamanho do prompt, ou tente um "
+                      "modelo com raciocínio menos verboso.")
                 )
             if final_reasoning:
                 raise OpenRouterError(
-                    "O modelo só retornou raciocínio interno, sem uma resposta "
-                    f"final (finish_reason={finish_reason or 'desconhecido'})."
+                    _("O modelo só retornou raciocínio interno, sem uma resposta "
+                      "final (finish_reason={reason}).").format(
+                        reason=finish_reason or _("desconhecido"))
                 )
-            raise OpenRouterError("O provedor não retornou conteúdo utilizável.")
+            raise OpenRouterError(_("O provedor não retornou conteúdo utilizável."))
 
         return final_text, collected_images, usage, final_reasoning
 
@@ -650,11 +665,11 @@ class OpenRouterClient:
     def _format_error(cls, response: requests.Response) -> str:
         name = cls.PROVIDER_NAME
         status = response.status_code
-        fallback = (response.text or "").strip() or "Erro desconhecido."
+        fallback = (response.text or "").strip() or _("Erro desconhecido.")
         try:
             payload = response.json()
         except ValueError:
-            return f"{name} respondeu HTTP {status}: {fallback}"
+            return _http_error(name, status, fallback)
 
         error_obj = payload.get("error") if isinstance(payload, dict) else None
         if isinstance(error_obj, str):
@@ -664,7 +679,7 @@ class OpenRouterClient:
             if detail:
                 error_obj = {"message": detail if isinstance(detail, str) else json.dumps(detail, ensure_ascii=False)}
         if not isinstance(error_obj, dict):
-            return f"{name} respondeu HTTP {status}: {fallback}"
+            return _http_error(name, status, fallback)
 
         # Formato OpenAI/OpenRouter: {"error": {"message": ...}}. Algumas APIs
         # devolvem só {"detail": ...} ou {"message": ...}; aceitamos também.
@@ -674,4 +689,13 @@ class OpenRouterClient:
         raw_detail = metadata.get("raw")
         details = [str(d) for d in (provider_name, raw_detail) if d]
         suffix = f" ({' | '.join(details)})" if details else ""
-        return f"{name} respondeu HTTP {status}: {message}{suffix}"
+        return _http_error(name, status, f"{message}{suffix}")
+
+
+def _http_error(provider: str, status: int, message: str) -> str:
+    # O texto "HTTP <código>" é procurado em outras partes do app (ex.: chave
+    # inválida na Maritaca = "HTTP 401"), por isso fica fora da tradução.
+    # TRANSLATORS: {provider} é OpenRouter ou Maritaca; {status} vira "HTTP 401".
+    return _("{provider} respondeu {status}: {message}").format(
+        provider=provider, status=f"HTTP {status}", message=message
+    )

@@ -18,47 +18,48 @@ gi.require_version("Adw", "1")
 from gi.repository import Adw, GLib, Gtk
 
 from core.config import DEFAULT_SYSTEM_PROMPT, Config
+from core.i18n import _
 
 # Opções dos seletores: (valor gravado na config, rótulo curto, explicação).
 # O rótulo é curto de propósito: o Adw.ComboRow corta com reticências o que
 # não cabe ao lado do título. A explicação da opção escolhida vai no
 # subtítulo da linha (que quebra linha) e no balão ao passar o mouse.
 _REASONING_OPTIONS = [
-    ("auto", "Automático",
-     "Cada modelo usa o próprio padrão — o mais parecido com o chat no navegador."),
-    ("none", "Desligado",
-     "Responde sem pensar antes. Mais rápido; pode errar mais em tarefas "
-     "complexas. Em modelos que sempre pensam, usa o nível mais leve."),
-    ("minimal", "Mínimo", "Pensa o mínimo possível antes de responder."),
-    ("low", "Baixo", "Pensa pouco: bom equilíbrio entre rapidez e qualidade."),
-    ("medium", "Médio", "Pensa moderadamente antes de responder."),
-    ("high", "Alto",
-     "Pensa bastante: melhor para problemas difíceis, mas bem mais lento e caro."),
+    ("auto", _("Automático"),
+     _("Cada modelo usa o próprio padrão — o mais parecido com o chat no navegador.")),
+    ("none", _("Desligado"),
+     _("Responde sem pensar antes. Mais rápido; pode errar mais em tarefas "
+       "complexas. Em modelos que sempre pensam, usa o nível mais leve.")),
+    ("minimal", _("Mínimo"), _("Pensa o mínimo possível antes de responder.")),
+    ("low", _("Baixo"), _("Pensa pouco: bom equilíbrio entre rapidez e qualidade.")),
+    ("medium", _("Médio"), _("Pensa moderadamente antes de responder.")),
+    ("high", _("Alto"),
+     _("Pensa bastante: melhor para problemas difíceis, mas bem mais lento e caro.")),
 ]
 
 _PROVIDER_SORT_OPTIONS = [
-    ("", "Padrão",
-     "Deixa o OpenRouter escolher, priorizando os provedores mais baratos."),
-    ("throughput", "Velocidade",
-     "Prioriza o provedor que gera mais tokens por segundo."),
-    ("latency", "Latência",
-     "Prioriza o provedor que começa a responder mais rápido."),
-    ("price", "Preço",
-     "Sempre o provedor mais barato, sem balanceamento."),
+    ("", _("Padrão"),
+     _("Deixa o OpenRouter escolher, priorizando os provedores mais baratos.")),
+    ("throughput", _("Velocidade"),
+     _("Prioriza o provedor que gera mais tokens por segundo.")),
+    ("latency", _("Latência"),
+     _("Prioriza o provedor que começa a responder mais rápido.")),
+    ("price", _("Preço"),
+     _("Sempre o provedor mais barato, sem balanceamento.")),
 ]
 
 
 _PRIVACY_OPTIONS = [
-    ("", "Todos",
-     "Qualquer provedor, inclusive os que retêm e treinam com os prompts "
-     "(a política da sua conta no site do OpenRouter continua valendo)."),
-    ("no_training", "Sem treino",
-     "Só provedores que não treinam com os seus prompts. Alguns ainda podem "
-     "retê-los por um tempo (escudos amarelo e verde no site). A lista de "
-     "modelos não muda; um modelo sem provedor compatível avisa no envio."),
-    ("zdr", "Retenção zero",
-     "Só provedores que não retêm nem treinam com os seus prompts (escudo "
-     "verde no site). A lista de modelos passa a mostrar só os compatíveis."),
+    ("", _("Todos"),
+     _("Qualquer provedor, inclusive os que retêm e treinam com os prompts "
+       "(a política da sua conta no site do OpenRouter continua valendo).")),
+    ("no_training", _("Sem treino"),
+     _("Só provedores que não treinam com os seus prompts. Alguns ainda podem "
+       "retê-los por um tempo (escudos amarelo e verde no site). A lista de "
+       "modelos não muda; um modelo sem provedor compatível avisa no envio.")),
+    ("zdr", _("Retenção zero"),
+     _("Só provedores que não retêm nem treinam com os seus prompts (escudo "
+       "verde no site). A lista de modelos passa a mostrar só os compatíveis.")),
 ]
 
 class PreferencesWindow(Adw.PreferencesWindow):
@@ -73,7 +74,7 @@ class PreferencesWindow(Adw.PreferencesWindow):
         self._on_saved = on_saved
         self.set_transient_for(parent)
         self.set_modal(True)
-        self.set_title("Preferências")
+        self.set_title(_("Preferências"))
         self.set_search_enabled(True)
 
         self._build_api_page()
@@ -99,21 +100,21 @@ class PreferencesWindow(Adw.PreferencesWindow):
         page.set_icon_name("network-transmit-receive-symbolic")
 
         group = Adw.PreferencesGroup()
-        group.set_title("Conexão")
+        group.set_title(_("Conexão"))
         group.set_description(
-            "Sua chave fica salva localmente em ~/.config/por-ai/config.json "
-            "(permissão 0600). O conteúdo das conversas é enviado ao provedor do "
-            "modelo escolhido através do OpenRouter. Opcional se você usar só "
-            "a Maritaca."
+            _("Sua chave fica salva localmente em ~/.config/por-ai/config.json "
+              "(permissão 0600). O conteúdo das conversas é enviado ao provedor do "
+              "modelo escolhido através do OpenRouter. Opcional se você usar só "
+              "a Maritaca.")
         )
 
         self._api_key_row = Adw.PasswordEntryRow()
-        self._api_key_row.set_title("Chave da API")
+        self._api_key_row.set_title(_("Chave da API"))
         self._api_key_row.set_text(self.config.api_key)
         group.add(self._api_key_row)
 
         self._site_name_row = Adw.EntryRow()
-        self._site_name_row.set_title("Nome do app (X-Title)")
+        self._site_name_row.set_title(_("Nome do app (X-Title)"))
         self._site_name_row.set_text(self.config.site_name)
         group.add(self._site_name_row)
 
@@ -126,12 +127,12 @@ class PreferencesWindow(Adw.PreferencesWindow):
         # precisa adivinhar que as preferências só são gravadas ao fechar a
         # janela. Fica habilitado apenas quando há uma chave digitada; Enter no
         # campo da chave faz o mesmo.
-        self._confirm_button = Gtk.Button(label="Confirmar")
+        self._confirm_button = Gtk.Button(label=_("Confirmar"))
         self._confirm_button.add_css_class("suggested-action")
         self._confirm_button.add_css_class("pill")
         self._confirm_button.set_halign(Gtk.Align.CENTER)
         self._confirm_button.set_margin_top(18)
-        self._confirm_button.set_tooltip_text("Salvar e fechar as preferências")
+        self._confirm_button.set_tooltip_text(_("Salvar e fechar as preferências"))
         self._confirm_button.connect("clicked", self._on_confirm)
         group.add(self._confirm_button)
 
@@ -142,14 +143,14 @@ class PreferencesWindow(Adw.PreferencesWindow):
         page.add(group)
 
         privacy_group = Adw.PreferencesGroup()
-        privacy_group.set_title("Privacidade")
+        privacy_group.set_title(_("Privacidade"))
         privacy_group.set_description(
-            "Filtra para quais provedores o OpenRouter pode enviar suas "
-            "mensagens. A pesquisa na web usa um serviço de busca à parte, "
-            "que não passa por este filtro."
+            _("Filtra para quais provedores o OpenRouter pode enviar suas "
+              "mensagens. A pesquisa na web usa um serviço de busca à parte, "
+              "que não passa por este filtro.")
         )
         self._privacy_row = self._make_combo_row(
-            "Provedores permitidos",
+            _("Provedores permitidos"),
             _PRIVACY_OPTIONS,
             self.config.privacy_filter,
         )
@@ -157,11 +158,11 @@ class PreferencesWindow(Adw.PreferencesWindow):
         page.add(privacy_group)
 
         models_group = Adw.PreferencesGroup()
-        models_group.set_title("Modelos favoritos")
+        models_group.set_title(_("Modelos favoritos"))
         models_group.set_description(
-            "Um ID por linha (ex.: anthropic/claude-3.5-sonnet). Esses aparecem "
-            "no seletor da janela. Use o menu ▸ Atualizar modelos para puxar o "
-            "catálogo completo do OpenRouter."
+            _("Um ID por linha (ex.: anthropic/claude-3.5-sonnet). Esses aparecem "
+              "no seletor da janela. Use o menu ▸ Atualizar modelos para puxar o "
+              "catálogo completo do OpenRouter.")
         )
 
         self._models_view = Gtk.TextView()
@@ -179,10 +180,10 @@ class PreferencesWindow(Adw.PreferencesWindow):
         models_scroller.add_css_class("card")
 
         self._auto_models_row = Adw.SwitchRow()
-        self._auto_models_row.set_title("Atualizar modelos automaticamente")
+        self._auto_models_row.set_title(_("Atualizar modelos automaticamente"))
         self._auto_models_row.set_subtitle(
-            "Puxa o catálogo do OpenRouter ao abrir o app, no máximo uma vez "
-            "a cada 24 horas. Substitui a lista abaixo, como o item do menu."
+            _("Puxa o catálogo do OpenRouter ao abrir o app, no máximo uma vez "
+              "a cada 24 horas. Substitui a lista abaixo, como o item do menu.")
         )
         self._auto_models_row.set_active(self.config.auto_update_models)
         models_group.add(self._auto_models_row)
@@ -203,26 +204,26 @@ class PreferencesWindow(Adw.PreferencesWindow):
         page.set_icon_name("network-server-symbolic")
 
         group = Adw.PreferencesGroup()
-        group.set_title("Conexão")
+        group.set_title(_("Conexão"))
         group.set_description(
-            "Chave da API da Maritaca AI (modelos Sabiá), criada em "
-            "plataforma.maritaca.ai. Fica salva no mesmo arquivo local da "
-            "chave do OpenRouter. As conversas com os modelos maritaca/… vão "
-            "direto para a Maritaca, sem passar pelo OpenRouter. Opcional se "
-            "você usar só o OpenRouter."
+            _("Chave da API da Maritaca AI (modelos Sabiá), criada em "
+              "plataforma.maritaca.ai. Fica salva no mesmo arquivo local da "
+              "chave do OpenRouter. As conversas com os modelos maritaca/… vão "
+              "direto para a Maritaca, sem passar pelo OpenRouter. Opcional se "
+              "você usar só o OpenRouter.")
         )
 
         self._maritaca_key_row = Adw.PasswordEntryRow()
-        self._maritaca_key_row.set_title("Chave da API")
+        self._maritaca_key_row.set_title(_("Chave da API"))
         self._maritaca_key_row.set_text(self.config.maritaca_api_key)
         group.add(self._maritaca_key_row)
 
-        self._maritaca_confirm_button = Gtk.Button(label="Confirmar")
+        self._maritaca_confirm_button = Gtk.Button(label=_("Confirmar"))
         self._maritaca_confirm_button.add_css_class("suggested-action")
         self._maritaca_confirm_button.add_css_class("pill")
         self._maritaca_confirm_button.set_halign(Gtk.Align.CENTER)
         self._maritaca_confirm_button.set_margin_top(18)
-        self._maritaca_confirm_button.set_tooltip_text("Salvar e fechar as preferências")
+        self._maritaca_confirm_button.set_tooltip_text(_("Salvar e fechar as preferências"))
         self._maritaca_confirm_button.connect("clicked", self._on_confirm)
         group.add(self._maritaca_confirm_button)
 
@@ -233,11 +234,11 @@ class PreferencesWindow(Adw.PreferencesWindow):
         page.add(group)
 
         models_group = Adw.PreferencesGroup()
-        models_group.set_title("Modelos")
+        models_group.set_title(_("Modelos"))
         models_group.set_description(
-            "Um ID por linha (ex.: sabia-4). O prefixo maritaca/ é acrescentado "
-            "sozinho. Aparecem no seletor quando há chave da Maritaca. O menu ▸ "
-            "Atualizar modelos também atualiza esta lista."
+            _("Um ID por linha (ex.: sabia-4). O prefixo maritaca/ é acrescentado "
+              "sozinho. Aparecem no seletor quando há chave da Maritaca. O menu ▸ "
+              "Atualizar modelos também atualiza esta lista.")
         )
 
         self._maritaca_models_view = Gtk.TextView()
@@ -260,9 +261,9 @@ class PreferencesWindow(Adw.PreferencesWindow):
 
         notes_group = Adw.PreferencesGroup()
         notes_group.set_description(
-            "Nos modelos da Maritaca não há pesquisa na web, filtro de "
-            "privacidade, prioridade do provedor nem controle do esforço de "
-            "raciocínio: esses recursos são do OpenRouter."
+            _("Nos modelos da Maritaca não há pesquisa na web, filtro de "
+              "privacidade, prioridade do provedor nem controle do esforço de "
+              "raciocínio: esses recursos são do OpenRouter.")
         )
         page.add(notes_group)
 
@@ -303,24 +304,24 @@ class PreferencesWindow(Adw.PreferencesWindow):
 
     def _build_behavior_page(self) -> None:
         page = Adw.PreferencesPage()
-        page.set_title("Comportamento")
+        page.set_title(_("Comportamento"))
         page.set_icon_name("preferences-system-symbolic")
 
         group = Adw.PreferencesGroup()
-        group.set_title("Geração")
+        group.set_title(_("Geração"))
 
         self._stream_row = Adw.SwitchRow()
-        self._stream_row.set_title("Streaming")
-        self._stream_row.set_subtitle("Mostrar a resposta sendo escrita em tempo real")
+        self._stream_row.set_title(_("Streaming"))
+        self._stream_row.set_subtitle(_("Mostrar a resposta sendo escrita em tempo real"))
         self._stream_row.set_active(self.config.stream)
         group.add(self._stream_row)
 
         self._tray_row = Adw.SwitchRow()
-        self._tray_row.set_title("Ícone na bandeja do sistema")
+        self._tray_row.set_title(_("Ícone na bandeja do sistema"))
         self._tray_row.set_subtitle(
-            "Mantém o app acessível pela área de notificação. "
-            "No GNOME, requer a extensão “AppIndicator and KStatusNotifierItem "
-            "Support”."
+            _("Mantém o app acessível pela área de notificação. "
+              "No GNOME, requer a extensão “AppIndicator and KStatusNotifierItem "
+              "Support”.")
         )
         self._tray_row.set_active(self.config.show_tray_icon)
         group.add(self._tray_row)
@@ -329,8 +330,8 @@ class PreferencesWindow(Adw.PreferencesWindow):
         # dos ícones simbólicos value-decrease/increase-symbolic, que podem estar
         # quebrados em alguns pacotes de ícones (ex.: Tela-circle).
         temp_row = Adw.ActionRow()
-        temp_row.set_title("Temperatura")
-        temp_row.set_subtitle("0 = determinístico, 2 = muito criativo")
+        temp_row.set_title(_("Temperatura"))
+        temp_row.set_subtitle(_("0 = determinístico, 2 = muito criativo"))
 
         adjustment = Gtk.Adjustment(
             value=self.config.temperature,
@@ -355,9 +356,9 @@ class PreferencesWindow(Adw.PreferencesWindow):
         page.add(self._build_speed_group())
 
         prompt_group = Adw.PreferencesGroup()
-        prompt_group.set_title("Prompt de sistema")
+        prompt_group.set_title(_("Prompt de sistema"))
         prompt_group.set_description(
-            "Instrução enviada no início de toda conversa."
+            _("Instrução enviada no início de toda conversa.")
         )
 
         self._prompt_view = Gtk.TextView()
@@ -371,11 +372,11 @@ class PreferencesWindow(Adw.PreferencesWindow):
         # Volta ao prompt padrão da versão instalada (que daí em diante
         # acompanha as atualizações do app). Só fica ativo quando o texto da
         # caixa difere do padrão.
-        self._prompt_reset_button = Gtk.Button(label="Restaurar padrão")
+        self._prompt_reset_button = Gtk.Button(label=_("Restaurar padrão"))
         self._prompt_reset_button.add_css_class("flat")
         self._prompt_reset_button.set_valign(Gtk.Align.CENTER)
         self._prompt_reset_button.set_tooltip_text(
-            "Voltar ao prompt de sistema padrão do POR.ai"
+            _("Voltar ao prompt de sistema padrão do POR.ai")
         )
         self._prompt_reset_button.connect(
             "clicked",
@@ -406,22 +407,22 @@ class PreferencesWindow(Adw.PreferencesWindow):
 
     def _build_speed_group(self) -> Adw.PreferencesGroup:
         group = Adw.PreferencesGroup()
-        group.set_title("Velocidade e raciocínio")
+        group.set_title(_("Velocidade e raciocínio"))
         group.set_description(
-            "Modelos que “pensam” antes de responder ficam mais lentos quanto "
-            "maior o esforço. O tempo gasto em cada etapa aparece no chat. "
-            "Estas duas opções valem só para os modelos do OpenRouter."
+            _("Modelos que “pensam” antes de responder ficam mais lentos quanto "
+              "maior o esforço. O tempo gasto em cada etapa aparece no chat. "
+              "Estas duas opções valem só para os modelos do OpenRouter.")
         )
 
         self._reasoning_row = self._make_combo_row(
-            "Esforço de raciocínio",
+            _("Esforço de raciocínio"),
             _REASONING_OPTIONS,
             self.config.reasoning_effort,
         )
         group.add(self._reasoning_row)
 
         self._provider_sort_row = self._make_combo_row(
-            "Prioridade do provedor",
+            _("Prioridade do provedor"),
             _PROVIDER_SORT_OPTIONS,
             self.config.provider_sort,
         )

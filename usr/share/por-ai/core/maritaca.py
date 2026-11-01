@@ -17,6 +17,7 @@ import logging
 from typing import Any, Callable, Dict, List, Optional, Set, Tuple
 
 from core.openrouter import OpenRouterClient, OpenRouterError
+from core.i18n import _
 
 logger = logging.getLogger(__name__)
 
@@ -52,7 +53,7 @@ class MaritacaClient(OpenRouterClient):
     BASE_URL = MARITACA_BASE
     PROVIDER_NAME = "Maritaca"
     MODELS_PATH = "/models"
-    MISSING_KEY_MESSAGE = "Configure a chave da API da Maritaca em Preferências."
+    MISSING_KEY_MESSAGE = _("Configure a chave da API da Maritaca em Preferências.")
 
     def __init__(self, api_key: str, timeout: int = 240) -> None:
         # site_url/site_name são cabeçalhos de estatística do OpenRouter;
