@@ -20,6 +20,7 @@ import gi
 
 gi.require_version("Gtk", "4.0")
 from gi.repository import Gdk, Gtk
+from core.i18n import _
 
 # Cada tema é definido por um pequeno conjunto de cores-base. "swatches" são
 # as 3 cores mostradas como pré-visualização na janela de seleção.
@@ -175,7 +176,7 @@ THEMES: Dict[str, Dict] = {
         "border": "#485f7d",
     },
     "lava-blue-light": {
-        "label": "Lava Blue (Claro)",
+        "label": _("Lava Blue (Claro)"),
         "bg": "#d8e2fd",
         "bg_dim": "#b8c2dc",
         "surface": "#ffffff",
@@ -195,7 +196,7 @@ THEMES: Dict[str, Dict] = {
         "border": "#2a5f5f",
     },
     "pink-tt-light": {
-        "label": "Pink TT (Claro)",
+        "label": _("Pink TT (Claro)"),
         "bg": "#ffcaef",
         "bg_dim": "#ddaace",
         "surface": "#fff4ff",
@@ -208,7 +209,7 @@ THEMES: Dict[str, Dict] = {
 
 # Chave especial: sem override, usa o tema do sistema/GTK normalmente.
 SYSTEM_SCHEME_ID = "system"
-SYSTEM_LABEL = "Padrão do sistema"
+SYSTEM_LABEL = _("Padrão do sistema")
 
 _STYLE_PRIORITY = Gtk.STYLE_PROVIDER_PRIORITY_USER
 

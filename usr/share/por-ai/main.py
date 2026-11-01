@@ -23,6 +23,8 @@ gi.require_version("Gtk", "4.0")
 gi.require_version("Adw", "1")
 from gi.repository import Adw, Gio, GLib
 
+# Primeiro: configura o idioma antes de qualquer módulo montar textos.
+from core.i18n import _
 from core.config import Config
 from ui.tray import MenuItem, TrayIcon
 from ui.window import PorAiWindow
@@ -165,9 +167,9 @@ class PorAiApplication(Adw.Application):
                 title="POR.ai",
                 on_activate=self._toggle_window,
                 menu_items=[
-                    MenuItem("toggle", "Mostrar / Ocultar", self._toggle_window),
+                    MenuItem("toggle", _("Mostrar / Ocultar"), self._toggle_window),
                     MenuItem.separator(),
-                    MenuItem("quit", "Sair", self.quit),
+                    MenuItem("quit", _("Sair"), self.quit),
                 ],
                 on_unavailable=self._on_tray_unavailable,
                 debug=True,

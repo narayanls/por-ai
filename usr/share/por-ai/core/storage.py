@@ -33,6 +33,7 @@ import uuid
 from typing import Any, Dict, List, Optional
 
 from gi.repository import GLib
+from core.i18n import _
 
 logger = logging.getLogger(__name__)
 
@@ -85,7 +86,7 @@ class ConversationStore:
             metas.append(
                 {
                     "id": data.get("id"),
-                    "title": data.get("title") or "Conversa",
+                    "title": data.get("title") or _("Conversa"),
                     "created_at": float(data.get("created_at", 0) or 0),
                     "updated_at": float(data.get("updated_at", 0) or 0),
                     "model": data.get("model", ""),

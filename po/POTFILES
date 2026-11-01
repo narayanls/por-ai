@@ -1,0 +1,14 @@
+usr/share/por-ai/core/assistant.py
+usr/share/por-ai/core/config.py
+usr/share/por-ai/core/maritaca.py
+usr/share/por-ai/core/openrouter.py
+usr/share/por-ai/core/sheet_gen.py
+usr/share/por-ai/core/storage.py
+usr/share/por-ai/core/updater.py
+usr/share/por-ai/main.py
+usr/share/por-ai/ui/color_schemes.py
+usr/share/por-ai/ui/message_row.py
+usr/share/por-ai/ui/preferences.py
+usr/share/por-ai/ui/theme_window.py
+usr/share/por-ai/ui/update_dialog.py
+usr/share/por-ai/ui/window.py

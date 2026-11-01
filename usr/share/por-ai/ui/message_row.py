@@ -22,6 +22,7 @@ from gi.repository import Adw, Gdk, Gio, GLib, Gtk, Pango
 from ui.markup import escape_plain, md_to_pango
 from typing import Dict, List, Optional
 from urllib.parse import urlparse
+from core.i18n import _, ngettext
 
 
 class MessageRow(Gtk.Box):
@@ -56,7 +57,7 @@ class MessageRow(Gtk.Box):
             # longas (ex.: scripts), sem precisar rolar até o fim.
             header = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=6)
 
-            sender = Gtk.Label(label="Assistente")
+            sender = Gtk.Label(label=_("Assistente"))
             sender.add_css_class("caption")
             sender.add_css_class("dim-label")
             sender.set_halign(Gtk.Align.START)
@@ -67,7 +68,7 @@ class MessageRow(Gtk.Box):
             copy_button.set_icon_name("edit-copy-symbolic")
             copy_button.add_css_class("flat")
             copy_button.add_css_class("circular")
-            copy_button.set_tooltip_text("Copiar resposta")
+            copy_button.set_tooltip_text(_("Copiar resposta"))
             copy_button.set_valign(Gtk.Align.START)
             copy_button.set_halign(Gtk.Align.END)
             copy_button.connect("clicked", self._on_copy)
@@ -76,7 +77,7 @@ class MessageRow(Gtk.Box):
 
             bubble.append(header)
         else:
-            sender = Gtk.Label(label="Você")
+            sender = Gtk.Label(label=_("Você"))
             sender.add_css_class("caption")
             sender.add_css_class("dim-label")
             sender.set_halign(Gtk.Align.START)
@@ -176,7 +177,7 @@ class MessageRow(Gtk.Box):
         if not self._sources:
             self._sources_box.set_visible(False)
             return
-        lines = ["<b>🌐 Fontes</b>"]
+        lines = ["<b>🌐 " + GLib.markup_escape_text(_("Fontes")) + "</b>"]
         for index, source in enumerate(self._sources, start=1):
             url = source["url"]
             title = (source.get("title") or "").strip() or self._host(url)
@@ -358,12 +359,12 @@ class MessageRow(Gtk.Box):
             display.get_clipboard().set(text)
         if self._copy_button is not None:
             self._copy_button.set_icon_name("object-select-symbolic")
-            self._copy_button.set_tooltip_text("Copiado!")
+            self._copy_button.set_tooltip_text(_("Copiado!"))
 
             def restore() -> bool:
                 if self._copy_button is not None:
                     self._copy_button.set_icon_name("edit-copy-symbolic")
-                    self._copy_button.set_tooltip_text("Copiar resposta")
+                    self._copy_button.set_tooltip_text(_("Copiar resposta"))
                 return False
 
             GLib.timeout_add_seconds(2, restore)
@@ -381,14 +382,15 @@ class MessageRow(Gtk.Box):
             return
         parts: List[str] = []
         if total_tokens is not None:
-            parts.append(f"{total_tokens} tokens")
+            parts.append(ngettext("{n} token", "{n} tokens", total_tokens).format(n=total_tokens))
         if cached_tokens:
-            parts.append(f"⚡ {cached_tokens} em cache")
+            parts.append("⚡ " + _("{n} em cache").format(n=cached_tokens))
         if cost is not None:
             parts.append(self._format_cost(cost))
         if web_searches:
-            plural = "pesquisa" if web_searches == 1 else "pesquisas"
-            parts.append(f"🌐 {web_searches} {plural} na web")
+            parts.append("🌐 " + ngettext(
+                "{n} pesquisa na web", "{n} pesquisas na web", web_searches
+            ).format(n=web_searches))
         if not parts:
             return
         self._meta_label.set_text(" · ".join(parts))

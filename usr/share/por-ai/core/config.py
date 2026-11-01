@@ -19,6 +19,7 @@ from typing import Any, Dict, List, Optional
 from gi.repository import GLib
 
 from core.maritaca import MARITACA_FALLBACK_MODELS, is_maritaca_model, to_app_id
+from core.i18n import N_, _
 
 logger = logging.getLogger(__name__)
 
@@ -26,13 +27,16 @@ APP_DIRNAME = "por-ai"
 CONFIG_FILENAME = "config.json"
 
 # Prompt de sistema padrão. Pode ser alterado em Preferências.
-DEFAULT_SYSTEM_PROMPT = (
+# O texto original (português) fica guardado à parte: quem trocou o idioma do
+# sistema e tem o padrão antigo gravado continua reconhecido como "padrão".
+DEFAULT_SYSTEM_PROMPT_SOURCE = N_(
     "Você é um assistente útil, direto e honesto. Responda no idioma do "
     "usuário, a menos que o usuário peça outro idioma. Quando o usuário enviar "
     "um arquivo para análise, não o "
     "reescreva sem ser solicitado. Quando não souber a resposta de uma pergunta "
     "informe o usuário de sua limitação e o oriente de como pode encontrar a resposta."
 )
+DEFAULT_SYSTEM_PROMPT = _(DEFAULT_SYSTEM_PROMPT_SOURCE)
 
 # Textos que já foram o prompt padrão em versões anteriores do app. Quem
 # nunca editou o prompt tem um deles gravado no config.json (as Preferências
@@ -290,7 +294,9 @@ class Config:
         if value is None:
             return True
         text = str(value).strip()
-        return text == DEFAULT_SYSTEM_PROMPT.strip() or any(
+        if text in (DEFAULT_SYSTEM_PROMPT.strip(), DEFAULT_SYSTEM_PROMPT_SOURCE.strip()):
+            return True
+        return any(
             text == old.strip() for old in LEGACY_SYSTEM_PROMPTS
         )
 

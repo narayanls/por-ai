@@ -19,6 +19,7 @@ from gi.repository import Adw, Gdk, Gtk
 
 from core.config import Config
 from ui import color_schemes
+from core.i18n import _
 
 
 class ThemeWindow(Adw.PreferencesWindow):
@@ -36,7 +37,7 @@ class ThemeWindow(Adw.PreferencesWindow):
 
         self.set_transient_for(parent)
         self.set_modal(True)
-        self.set_title("Temas")
+        self.set_title(_("Temas"))
         self.set_search_enabled(False)
         self.set_default_size(420, 520)
 
@@ -46,13 +47,13 @@ class ThemeWindow(Adw.PreferencesWindow):
 
     def _build_page(self) -> None:
         page = Adw.PreferencesPage()
-        page.set_title("Temas")
+        page.set_title(_("Temas"))
         page.set_icon_name("applications-graphics-symbolic")
 
         group = Adw.PreferencesGroup()
-        group.set_title("Esquema de cores")
+        group.set_title(_("Esquema de cores"))
         group.set_description(
-            "Escolha uma paleta para a interface. A mudança é aplicada na hora."
+            _("Escolha uma paleta para a interface. A mudança é aplicada na hora.")
         )
 
         radio_group: Optional[Gtk.CheckButton] = None
