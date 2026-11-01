@@ -21,7 +21,7 @@ import gi
 
 gi.require_version("Gtk", "4.0")
 gi.require_version("Adw", "1")
-from gi.repository import Adw, Gio, GLib
+from gi.repository import Adw, Gdk, Gio, GLib, Gtk
 
 # Primeiro: configura o idioma antes de qualquer módulo montar textos.
 from core.i18n import _
@@ -99,6 +99,44 @@ _configure_im_module()
 
 APPLICATION_ID = "io.github.narayanls.PorAi"
 
+# Ícones que a interface usa e que NÃO vêm embutidos no GTK: servem para
+# testar se o tema de ícones em uso realmente os tem.
+_ICON_PROBES = (
+    "sidebar-show-symbolic",
+    "document-new-symbolic",
+    "mail-attachment-symbolic",
+    "send-to-symbolic",
+)
+_FALLBACK_ICON_THEME = "Adwaita"
+
+
+def _ensure_icon_theme() -> bool:
+    """Usa o Adwaita quando o tema de ícones do sistema não serve.
+
+    No Flatpak, o GTK recebe pelo portal o nome do tema do host (ex.:
+    "Tela-circle-nord-dark"), mas esse tema normalmente não existe dentro da
+    sandbox. O GTK 4 então cai direto no "hicolor" — sem passar pelo
+    Adwaita — e todo ícone que não vem embutido no GTK aparece como
+    "imagem ausente". Também cobre temas instalados que não têm os ícones
+    simbólicos usados aqui.
+    """
+    display = Gdk.Display.get_default()
+    settings = Gtk.Settings.get_default()
+    if display is None or settings is None:
+        return False
+    current = settings.get_property("gtk-icon-theme-name") or ""
+    if current == _FALLBACK_ICON_THEME:
+        return False
+    theme = Gtk.IconTheme.get_for_display(display)
+    missing = [name for name in _ICON_PROBES if not theme.has_icon(name)]
+    if missing:
+        logger.info(
+            "Tema de ícones %r indisponível ou incompleto (faltam %s); usando %s.",
+            current, ", ".join(missing), _FALLBACK_ICON_THEME,
+        )
+        settings.set_property("gtk-icon-theme-name", _FALLBACK_ICON_THEME)
+    return False
+
 
 class PorAiApplication(Adw.Application):
     def __init__(self) -> None:
@@ -114,6 +152,15 @@ class PorAiApplication(Adw.Application):
     def do_startup(self) -> None:
         Adw.Application.do_startup(self)
         GLib.set_application_name("POR.ai")
+        # Tema de ícones: confere agora e de novo sempre que o sistema trocar
+        # de tema (o portal avisa e o GTK sobrescreve a configuração).
+        _ensure_icon_theme()
+        settings = Gtk.Settings.get_default()
+        if settings is not None:
+            settings.connect(
+                "notify::gtk-icon-theme-name",
+                lambda *_a: _ensure_icon_theme(),
+            )
         # Atalhos de teclado.
         self.set_accels_for_action("win.new-chat", ["<Control>n"])
         self.set_accels_for_action("win.preferences", ["<Control>comma"])
