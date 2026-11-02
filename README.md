@@ -35,7 +35,6 @@ Você precisa de pelo menos uma chave de API para usar este aplicativo. Pode usa
 - **OpenRouter** — acesse o site clicando [aqui.](https://openrouter.ai) Existem **modelos PAGOS** e gratuitos, a maior parte é pago. Adicione saldo no site do OpenRouter ou pesquise por modelos grátis.
 - **Maritaca AI** — empresa brasileira, criadora dos modelos **Sabiá**, treinados com foco no português. Crie a chave na [plataforma da Maritaca](https://plataforma.maritaca.ai). Os modelos são **pagos**, com preços em reais; veja a [tabela de preços](https://docs.maritaca.ai/pt/precos).
 
-Você precisa criar uma chave de API no site do OpenRouter para usar este aplicativo. Acesse o site clicando [aqui.](https://openrouter.ai) Existem **modelos PAGOS** e gratuitos, a maior parte é pago. Adicione saldo no site do OpenRouter ou pesquise por "free" para achar modelos grátis.
 
 ## 🚀 Primeiro uso
 
