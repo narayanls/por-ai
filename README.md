@@ -130,14 +130,13 @@ python3 usr/share/por-ai/main.py
 
 O POR.ai roda no seu computador, mas depende da conexão com a internet — sem telemetria, sem servidor intermediário próprio. As conversas são salvas localmente em `~/.local/share/por-ai/` e as chaves da API ficam em `~/.config/por-ai/config.json` (permissão `0600`).
 
-O conteúdo das mensagens e arquivos anexados é enviado ao **OpenRouter**, que os encaminha ao provedor do modelo escolhido. Cada provedor tem sua política de dados, indicada no site do OpenRouter por um escudo: **verde** não retém as conversas nem as usa para treinar IAs; **amarelo** pode reter, mas não treina com elas; **vermelho** retém e treina. Nas configurações da sua conta OpenRouter, ou pelo próprio app (abaixo), você pode restringir os provedores que treinam com dados dos usuários.
+O conteúdo das mensagens e dos arquivos anexados vai para o provedor do modelo escolhido: o **OpenRouter** ou a **Maritaca**.
 
----
+### OpenRouter
 
-Com os modelos da **Maritaca**, as mensagens vão direto para a API da Maritaca, sem passar pelo OpenRouter. Os modelos com final `-br-sp` processam tudo em território brasileiro.
+O OpenRouter encaminha as mensagens ao provedor do modelo escolhido. Cada provedor tem sua política de dados, indicada no site do OpenRouter por um escudo: **verde** não retém as conversas nem as usa para treinar IAs; **amarelo** pode reter, mas não treina com elas; **vermelho** retém e treina. Nas configurações da sua conta OpenRouter, ou pelo próprio app (abaixo), você pode restringir os provedores que treinam com dados dos usuários.
 
----
-### Pelo próprio app
+#### Pelo próprio app
 
 Em **Preferências ▸ OpenRouter ▸ Privacidade ▸ Provedores permitidos**, escolha:
 
@@ -148,6 +147,18 @@ Em **Preferências ▸ OpenRouter ▸ Privacidade ▸ Provedores permitidos**, e
 Ao mudar essa opção, o app recarrega a lista de modelos automaticamente. A pesquisa na web (botão 🌐) usa um serviço de busca à parte, que não passa por esse filtro.
 
 <img width="635" height="367" alt="satty-20261018-192242" src="https://github.com/user-attachments/assets/96ac2208-e950-4c46-a396-b9c3f89ca81b" />
+
+### Maritaca
+
+Com os modelos da Maritaca, as mensagens vão direto para a API da Maritaca, sem passar pelo OpenRouter. Esse filtro do app não se aplica aqui, porque a política abaixo já vale por padrão, sem nada para configurar:
+
+- **Sem treino** — os dados enviados pela API (prompts, respostas, históricos de conversa e arquivos) não são usados para treinar os modelos da Maritaca;
+- **Sem armazenamento do conteúdo** — prompts e respostas são descartados depois que a resposta é gerada, com duas ressalvas:
+  - logs de erro e de observabilidade podem conter o conteúdo da requisição e são excluídos em até **30 dias**;
+  - registros técnicos (IP, data/hora e contagem de tokens) ficam guardados por até **18 meses**, sem o conteúdo dos prompts e das respostas;
+- **Processamento no Brasil** — os modelos com final `-br-sp` processam tudo em território brasileiro.
+
+Detalhes na página de [Tratamento de Dados e Segurança](https://www.maritaca.ai/tratamento-de-dados/) da Maritaca.
 
 
 ---
