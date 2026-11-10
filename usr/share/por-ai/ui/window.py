@@ -67,7 +67,7 @@ except Exception as _exc:  # pylint: disable=broad-except
     _UPDATE_AVAILABLE = False
 
 
-APP_VERSION = "0.2.0.0"
+APP_VERSION = "0.2.0.2"
 
 _CSS = b"""
 .message-bubble {
@@ -213,11 +213,15 @@ class PorAiWindow(Adw.ApplicationWindow):
             "about": self._on_about,
             "check-update": self._on_check_update,
             "search-chat": self._on_search_chat_action,
+            "export-chat": self._on_export_chat,
+            "import-chat": self._on_import_chat,
         }
         for name, callback in actions.items():
             action = Gio.SimpleAction.new(name, None)
             action.connect("activate", callback)
             self.add_action(action)
+        # Só dá para exportar quando há uma conversa com mensagens aberta.
+        self._update_export_action()
 
     # ------------------------------------------------------------------ #
     # Construção da interface                                              #
@@ -308,6 +312,8 @@ class PorAiWindow(Adw.ApplicationWindow):
         # Menu principal.
         menu = Gio.Menu()
         menu.append(_("Nova conversa"), "win.new-chat")
+        menu.append(_("Exportar conversa…"), "win.export-chat")
+        menu.append(_("Importar conversa…"), "win.import-chat")
         menu.append(_("Atualizar modelos"), "win.refresh-models")
         menu.append(_("Preferências"), "win.preferences")
         menu.append(_("Temas"), "win.color-scheme")
@@ -334,6 +340,17 @@ class PorAiWindow(Adw.ApplicationWindow):
         self._chat_search_button.set_icon_name("edit-find-symbolic")
         self._chat_search_button.set_tooltip_text(_("Buscar nesta conversa (Ctrl+F)"))
         header.pack_end(self._chat_search_button)
+
+        # Exportar/importar conversa. Fica à esquerda da busca. "Exportar"
+        # fica desativado (pela ação win.export-chat) sem conversa aberta.
+        transfer_menu = Gio.Menu()
+        transfer_menu.append(_("Exportar esta conversa…"), "win.export-chat")
+        transfer_menu.append(_("Importar conversa…"), "win.import-chat")
+        transfer_button = Gtk.MenuButton()
+        transfer_button.set_icon_name("document-send-symbolic")
+        transfer_button.set_menu_model(transfer_menu)
+        transfer_button.set_tooltip_text(_("Exportar ou importar conversa"))
+        header.pack_end(transfer_button)
 
         return header
 
@@ -1953,6 +1970,7 @@ class PorAiWindow(Adw.ApplicationWindow):
         self._show_placeholder()
         self._set_busy(False)
         self._refresh_chat_search()
+        self._update_export_action()
 
         # O grab_focus precisa esperar o reset da UI terminar; feito na hora,
         # o widget ainda não está mapeado e o foco não gruda.
@@ -1989,16 +2007,27 @@ class PorAiWindow(Adw.ApplicationWindow):
         if self._current_conv_id is None:
             self._current_conv_id = self.store.new_id()
             self._created_at = time.time()
-        conversation = {
+        self.store.save(self._conversation_snapshot())
+        self._reload_sidebar(select_current=True)
+        self._update_export_action()
+
+    def _conversation_snapshot(self) -> Dict[str, Any]:
+        """Monta o dicionário da conversa aberta, no formato do storage."""
+        # Prefere o título salvo em disco: assim um nome dado em "Renomear"
+        # vai junto na exportação.
+        title = self._derive_title()
+        if self._current_conv_id is not None:
+            saved = self.store.load(self._current_conv_id)
+            if saved and saved.get("title"):
+                title = saved["title"]
+        return {
             "id": self._current_conv_id,
-            "title": self._derive_title(),
+            "title": title,
             "created_at": self._created_at or time.time(),
             "updated_at": time.time(),
             "model": self._current_model(),
             "messages": self._messages,
         }
-        self.store.save(conversation)
-        self._reload_sidebar(select_current=True)
 
     def _reload_sidebar(self, select_current: bool = False) -> None:
         if getattr(self, "_conv_list", None) is None:
@@ -2172,6 +2201,7 @@ class PorAiWindow(Adw.ApplicationWindow):
                 self._messages_box.append(row)
 
         self._set_busy(False)
+        self._update_export_action()
         self._scroll_to_bottom(force=True)
         GLib.idle_add(lambda: self._input_view.grab_focus() and False)
         # Com a busca aberta, procura o mesmo termo na conversa recém-aberta.
@@ -2223,6 +2253,110 @@ class PorAiWindow(Adw.ApplicationWindow):
 
         dialog.connect("response", on_response)
         dialog.present(self)
+
+    # ------------------------------------------------------------------ #
+    # Exportar / importar conversa                                         #
+    # ------------------------------------------------------------------ #
+
+    def _update_export_action(self) -> None:
+        action = self.lookup_action("export-chat")
+        if action is not None:
+            action.set_enabled(bool(self._messages))
+
+    @staticmethod
+    def _json_file_filters() -> Gio.ListStore:
+        filters = Gio.ListStore.new(Gtk.FileFilter)
+        json_filter = Gtk.FileFilter()
+        json_filter.set_name(_("Conversas do POR.ai (JSON)"))
+        json_filter.add_pattern("*.json")
+        json_filter.add_mime_type("application/json")
+        filters.append(json_filter)
+        all_filter = Gtk.FileFilter()
+        all_filter.set_name(_("Todos os arquivos"))
+        all_filter.add_pattern("*")
+        filters.append(all_filter)
+        return filters
+
+    @staticmethod
+    def _export_file_name(title: str) -> str:
+        """Nome de arquivo sugerido a partir do título da conversa."""
+        name = re.sub(r'[\\/:*?"<>|\x00-\x1f]+', " ", title or "")
+        name = re.sub(r"\s+", " ", name).strip(" .")[:60].strip()
+        return f"{name or 'conversa'}.json"
+
+    def _on_export_chat(self, *_args) -> None:
+        if not self._messages:
+            self._toast(_("Abra uma conversa para exportar."))
+            return
+        # Tira a "foto" da conversa agora: se uma resposta ainda estiver
+        # chegando, exporta o que já existe até este momento.
+        conversation = self._conversation_snapshot()
+        conversation["messages"] = list(self._messages)
+
+        dialog = Gtk.FileDialog()
+        dialog.set_title(_("Exportar conversa"))
+        dialog.set_initial_name(self._export_file_name(conversation["title"]))
+        filters = self._json_file_filters()
+        dialog.set_filters(filters)
+        dialog.set_default_filter(filters.get_item(0))
+        dialog.save(
+            self,
+            None,
+            lambda d, result: self._on_export_chosen(d, result, conversation),
+        )
+
+    def _on_export_chosen(self, dialog, result, conversation: Dict[str, Any]) -> None:
+        try:
+            gfile = dialog.save_finish(result)
+        except GLib.Error:
+            return  # usuário cancelou
+        path = gfile.get_path() if gfile is not None else None
+        if not path:
+            self._toast(_("Não foi possível salvar nesse local."))
+            return
+        try:
+            self.store.export_to_file(conversation, path)
+        except OSError as exc:
+            logger.error("Falha ao exportar conversa: %s", exc)
+            self._toast(_("Falha ao exportar a conversa."))
+            return
+        self._toast(
+            _("Conversa exportada para {name}.").format(name=os.path.basename(path))
+        )
+
+    def _on_import_chat(self, *_args) -> None:
+        dialog = Gtk.FileDialog()
+        dialog.set_title(_("Importar conversa"))
+        filters = self._json_file_filters()
+        dialog.set_filters(filters)
+        dialog.set_default_filter(filters.get_item(0))
+        dialog.open(self, None, self._on_import_chosen)
+
+    def _on_import_chosen(self, dialog, result) -> None:
+        try:
+            gfile = dialog.open_finish(result)
+        except GLib.Error:
+            return  # usuário cancelou
+        path = gfile.get_path() if gfile is not None else None
+        if not path:
+            self._toast(_("Não foi possível abrir esse arquivo."))
+            return
+        try:
+            conversation = self.store.import_from_file(path)
+        except ValueError as exc:
+            self._toast(str(exc))
+            return
+        except OSError as exc:
+            logger.error("Falha ao importar conversa: %s", exc)
+            self._toast(_("Não foi possível ler o arquivo."))
+            return
+
+        # Abre a conversa importada e a destaca na barra lateral.
+        self._load_conversation(conversation["id"])
+        self._reload_sidebar(select_current=True)
+        if self._split_view.get_collapsed():
+            self._split_view.set_show_sidebar(False)
+        self._toast(_("Conversa importada."))
 
     def _on_refresh_models(self, *_args) -> None:
         if not self.config.is_configured():
