@@ -140,6 +140,11 @@ msgstr "Error rasterizing SVG: {error}"
 msgid "Erro ao rasterizar SVG: PNG vazio."
 msgstr "Error rasterizing SVG: empty PNG."
 
+#: usr/share/por-ai/core/assistant.py:1128
+#: usr/share/por-ai/core/assistant.py:1145
+msgid "Imagem gerada"
+msgstr "Generated image"
+
 #: usr/share/por-ai/core/assistant.py:1216
 #: usr/share/por-ai/core/assistant.py:1230
 #, python-brace-format
@@ -297,9 +302,25 @@ msgstr "{provider} responded {status}: {message}"
 msgid "Planilha"
 msgstr "Spreadsheet"
 
-#: usr/share/por-ai/core/storage.py:89
+#: usr/share/por-ai/core/storage.py:89 usr/share/por-ai/core/storage.py:153
 msgid "Conversa"
 msgstr "Conversation"
+
+#: usr/share/por-ai/core/storage.py:209
+msgid "O arquivo não é um JSON válido."
+msgstr "The file is not valid JSON."
+
+#: usr/share/por-ai/core/storage.py:214
+msgid "O arquivo não contém uma conversa do POR.ai."
+msgstr "The file does not contain a POR.ai conversation."
+
+#: usr/share/por-ai/core/storage.py:220
+msgid "A conversa importada não tem mensagens."
+msgstr "The imported conversation has no messages."
+
+#: usr/share/por-ai/core/storage.py:229
+msgid "Conversa importada"
+msgstr "Imported conversation"
 
 #: usr/share/por-ai/core/updater.py:223
 #, python-brace-format
@@ -411,11 +432,11 @@ msgstr "Installation finished."
 msgid "Nenhum pacote encontrado para este sistema ({suffix})."
 msgstr "No package found for this system ({suffix})."
 
-#: usr/share/por-ai/main.py:170
+#: usr/share/por-ai/main.py:217
 msgid "Mostrar / Ocultar"
 msgstr "Show / Hide"
 
-#: usr/share/por-ai/main.py:172
+#: usr/share/por-ai/main.py:219
 msgid "Sair"
 msgstr "Quit"
 
@@ -559,7 +580,7 @@ msgstr "Price"
 msgid "Sempre o provedor mais barato, sem balanceamento."
 msgstr "Always the cheapest provider, with no load balancing."
 
-#: usr/share/por-ai/ui/preferences.py:53 usr/share/por-ai/ui/window.py:2434
+#: usr/share/por-ai/ui/preferences.py:53 usr/share/por-ai/ui/window.py:2569
 msgid "Todos"
 msgstr "All"
 
@@ -571,7 +592,7 @@ msgstr ""
 "Any provider, including those that retain and train on prompts (your account"
 " policy on the OpenRouter website still applies)."
 
-#: usr/share/por-ai/ui/preferences.py:56 usr/share/por-ai/ui/window.py:2435
+#: usr/share/por-ai/ui/preferences.py:56 usr/share/por-ai/ui/window.py:2570
 msgid "Sem treino"
 msgstr "No training"
 
@@ -585,7 +606,7 @@ msgstr ""
 " for a while (yellow and green shields on the website). The model list does "
 "not change; a model with no compatible provider warns you when sending."
 
-#: usr/share/por-ai/ui/preferences.py:60 usr/share/por-ai/ui/window.py:2436
+#: usr/share/por-ai/ui/preferences.py:60 usr/share/por-ai/ui/window.py:2571
 msgid "Retenção zero"
 msgstr "Zero retention"
 
@@ -597,7 +618,7 @@ msgstr ""
 "Only providers that neither retain nor train on your prompts (green shield "
 "on the website). The model list then shows only compatible models."
 
-#: usr/share/por-ai/ui/preferences.py:77 usr/share/por-ai/ui/window.py:312
+#: usr/share/por-ai/ui/preferences.py:77 usr/share/por-ai/ui/window.py:318
 msgid "Preferências"
 msgstr "Preferences"
 
@@ -788,7 +809,7 @@ msgid "Prioridade do provedor"
 msgstr "Provider priority"
 
 #: usr/share/por-ai/ui/theme_window.py:40
-#: usr/share/por-ai/ui/theme_window.py:50 usr/share/por-ai/ui/window.py:313
+#: usr/share/por-ai/ui/theme_window.py:50 usr/share/por-ai/ui/window.py:319
 msgid "Temas"
 msgstr "Themes"
 
@@ -852,65 +873,81 @@ msgstr "Update failed: {error}"
 msgid "Tentar de novo"
 msgstr "Try again"
 
-#: usr/share/por-ai/ui/window.py:282
+#: usr/share/por-ai/ui/window.py:286
 msgid "Mostrar/ocultar conversas"
 msgstr "Show/hide conversations"
 
-#: usr/share/por-ai/ui/window.py:294 usr/share/por-ai/ui/window.py:968
+#: usr/share/por-ai/ui/window.py:298 usr/share/por-ai/ui/window.py:986
 msgid "Selecionar modelo"
 msgstr "Select model"
 
-#: usr/share/por-ai/ui/window.py:304 usr/share/por-ai/ui/window.py:310
-#: usr/share/por-ai/ui/window.py:1983
+#: usr/share/por-ai/ui/window.py:308 usr/share/por-ai/ui/window.py:314
+#: usr/share/por-ai/ui/window.py:2002
 msgid "Nova conversa"
 msgstr "New conversation"
 
-#: usr/share/por-ai/ui/window.py:311
+#: usr/share/por-ai/ui/window.py:315
+msgid "Exportar conversa…"
+msgstr "Export conversation…"
+
+#: usr/share/por-ai/ui/window.py:316 usr/share/por-ai/ui/window.py:348
+msgid "Importar conversa…"
+msgstr "Import conversation…"
+
+#: usr/share/por-ai/ui/window.py:317
 msgid "Atualizar modelos"
 msgstr "Update models"
 
-#: usr/share/por-ai/ui/window.py:314
+#: usr/share/por-ai/ui/window.py:320
 msgid "Sobre o POR.ai"
 msgstr "About POR.ai"
 
-#: usr/share/por-ai/ui/window.py:315
+#: usr/share/por-ai/ui/window.py:321
 msgid "Verificar atualizações"
 msgstr "Check for updates"
 
-#: usr/share/por-ai/ui/window.py:320
+#: usr/share/por-ai/ui/window.py:326
 msgid "Menu"
 msgstr "Menu"
 
-#: usr/share/por-ai/ui/window.py:335
+#: usr/share/por-ai/ui/window.py:341
 msgid "Buscar nesta conversa (Ctrl+F)"
 msgstr "Search this conversation (Ctrl+F)"
 
-#: usr/share/por-ai/ui/window.py:345
+#: usr/share/por-ai/ui/window.py:347
+msgid "Exportar esta conversa…"
+msgstr "Export this conversation…"
+
+#: usr/share/por-ai/ui/window.py:352
+msgid "Exportar ou importar conversa"
+msgstr "Export or import conversation"
+
+#: usr/share/por-ai/ui/window.py:362
 msgid "Conversas"
 msgstr "Conversations"
 
-#: usr/share/por-ai/ui/window.py:351
+#: usr/share/por-ai/ui/window.py:368
 msgid "Buscar conversas"
 msgstr "Search conversations"
 
-#: usr/share/por-ai/ui/window.py:363
+#: usr/share/por-ai/ui/window.py:380
 msgid "Buscar por nome da conversa…"
 msgstr "Search by conversation name…"
 
-#: usr/share/por-ai/ui/window.py:469
+#: usr/share/por-ai/ui/window.py:486
 #, python-brace-format
 msgid "Anexar arquivos — até {max}"
 msgstr "Attach files — up to {max}"
 
-#: usr/share/por-ai/ui/window.py:553 usr/share/por-ai/ui/window.py:1485
+#: usr/share/por-ai/ui/window.py:570 usr/share/por-ai/ui/window.py:1503
 msgid "Enviar (Enter)"
 msgstr "Send (Enter)"
 
-#: usr/share/por-ai/ui/window.py:582
+#: usr/share/por-ai/ui/window.py:599
 msgid "A pesquisa na web só está disponível nos modelos do OpenRouter."
 msgstr "Web search is only available for OpenRouter models."
 
-#: usr/share/por-ai/ui/window.py:590
+#: usr/share/por-ai/ui/window.py:607
 msgid ""
 "Pesquisa na web LIGADA para a próxima mensagem (tem custo extra no "
 "OpenRouter). Clique para desligar."
@@ -918,7 +955,7 @@ msgstr ""
 "Web search ON for the next message (extra cost on OpenRouter). Click to turn"
 " off."
 
-#: usr/share/por-ai/ui/window.py:597
+#: usr/share/por-ai/ui/window.py:614
 msgid ""
 "Pesquisar na web nesta mensagem e mostrar as fontes (custo extra; desliga "
 "sozinho após o envio)"
@@ -926,7 +963,7 @@ msgstr ""
 "Search the web for this message and show the sources (extra cost; turns "
 "itself off after sending)"
 
-#: usr/share/por-ai/ui/window.py:812
+#: usr/share/por-ai/ui/window.py:830
 msgid ""
 "Chat privado com modelos do OpenRouter e da Maritaca.\n"
 "Digite uma mensagem ou anexe um arquivo para análise."
@@ -934,7 +971,7 @@ msgstr ""
 "Private chat with OpenRouter and Maritaca models.\n"
 "Type a message or attach a file for analysis."
 
-#: usr/share/por-ai/ui/window.py:830
+#: usr/share/por-ai/ui/window.py:848
 msgid ""
 "Note que há modelos pagos e gratuitos. Através do site do OpenRouter você "
 "pode adicionar saldo ou pesquisar por free para encontrar modelos que não "
@@ -943,127 +980,127 @@ msgstr ""
 "Note that there are paid and free models. On the OpenRouter website you can "
 "add credit or search for free to find models that cost nothing."
 
-#: usr/share/por-ai/ui/window.py:870
+#: usr/share/por-ai/ui/window.py:888
 msgid "Buscar modelo…"
 msgstr "Search model…"
 
-#: usr/share/por-ai/ui/window.py:1045
+#: usr/share/por-ai/ui/window.py:1063
 msgid "Configure a chave da API em Preferências."
 msgstr "Set up the API key in Preferences."
 
-#: usr/share/por-ai/ui/window.py:1133
+#: usr/share/por-ai/ui/window.py:1151
 msgid "Pesquisando na web…"
 msgstr "Searching the web…"
 
-#: usr/share/por-ai/ui/window.py:1134
+#: usr/share/por-ai/ui/window.py:1152
 msgid "Aguardando o modelo…"
 msgstr "Waiting for the model…"
 
-#: usr/share/por-ai/ui/window.py:1169
+#: usr/share/por-ai/ui/window.py:1187
 msgid "Já existe uma resposta em andamento."
 msgstr "A response is already in progress."
 
-#: usr/share/por-ai/ui/window.py:1263
+#: usr/share/por-ai/ui/window.py:1281
 msgid "Pensando…"
 msgstr "Thinking…"
 
-#: usr/share/por-ai/ui/window.py:1267
+#: usr/share/por-ai/ui/window.py:1285
 #, python-brace-format
 msgid "Pensou por {seconds} s"
 msgstr "Thought for {seconds} s"
 
-#: usr/share/por-ai/ui/window.py:1268
+#: usr/share/por-ai/ui/window.py:1286
 #, python-brace-format
 msgid "Pensando… ({seconds} s)"
 msgstr "Thinking… ({seconds} s)"
 
-#: usr/share/por-ai/ui/window.py:1276
+#: usr/share/por-ai/ui/window.py:1294
 #, python-brace-format
 msgid "Conexão falhou, tentando de novo ({attempt}/{total}) em {delay}s…"
 msgstr "Connection failed, retrying ({attempt}/{total}) in {delay}s…"
 
-#: usr/share/por-ai/ui/window.py:1423
+#: usr/share/por-ai/ui/window.py:1441
 msgid "(resposta vazia ou cancelada)"
 msgstr "(empty or cancelled response)"
 
-#: usr/share/por-ai/ui/window.py:1480
+#: usr/share/por-ai/ui/window.py:1498
 msgid "Parar"
 msgstr "Stop"
 
-#: usr/share/por-ai/ui/window.py:1525
+#: usr/share/por-ai/ui/window.py:1543
 msgid "Buscar nesta conversa…"
 msgstr "Search this conversation…"
 
-#: usr/share/por-ai/ui/window.py:1549
+#: usr/share/por-ai/ui/window.py:1567
 msgid "Anterior (Shift+Enter)"
 msgstr "Previous (Shift+Enter)"
 
-#: usr/share/por-ai/ui/window.py:1555
+#: usr/share/por-ai/ui/window.py:1573
 msgid "Próxima (Enter)"
 msgstr "Next (Enter)"
 
-#: usr/share/por-ai/ui/window.py:1681
+#: usr/share/por-ai/ui/window.py:1699
 msgid "Nenhum"
 msgstr "No results"
 
-#: usr/share/por-ai/ui/window.py:1717
+#: usr/share/por-ai/ui/window.py:1735
 #, python-brace-format
 msgid "{current} de {total}"
 msgstr "{current} of {total}"
 
-#: usr/share/por-ai/ui/window.py:1766 usr/share/por-ai/ui/window.py:1819
+#: usr/share/por-ai/ui/window.py:1784 usr/share/por-ai/ui/window.py:1837
 #, python-brace-format
 msgid "Máximo de {max} arquivos por mensagem."
 msgstr "Maximum of {max} files per message."
 
-#: usr/share/por-ai/ui/window.py:1813
+#: usr/share/por-ai/ui/window.py:1831
 msgid "Só é possível anexar arquivos locais."
 msgstr "Only local files can be attached."
 
-#: usr/share/por-ai/ui/window.py:1823
+#: usr/share/por-ai/ui/window.py:1841
 msgid "Anexar arquivos"
 msgstr "Attach files"
 
-#: usr/share/por-ai/ui/window.py:1873
+#: usr/share/por-ai/ui/window.py:1891
 #, python-brace-format
 msgid "Limite de {max} arquivos atingido."
 msgstr "Limit of {max} files reached."
 
-#: usr/share/por-ai/ui/window.py:1875
+#: usr/share/por-ai/ui/window.py:1893
 msgid "Nenhum arquivo suportado foi anexado."
 msgstr "No supported file was attached."
 
-#: usr/share/por-ai/ui/window.py:1925
+#: usr/share/por-ai/ui/window.py:1943
 msgid "Remover anexo"
 msgstr "Remove attachment"
 
-#: usr/share/por-ai/ui/window.py:2061 usr/share/por-ai/ui/window.py:2194
+#: usr/share/por-ai/ui/window.py:2091 usr/share/por-ai/ui/window.py:2225
 msgid "Renomear"
 msgstr "Rename"
 
-#: usr/share/por-ai/ui/window.py:2071
+#: usr/share/por-ai/ui/window.py:2101
 msgid "Excluir"
 msgstr "Delete"
 
-#: usr/share/por-ai/ui/window.py:2092
+#: usr/share/por-ai/ui/window.py:2122
 msgid "agora"
 msgstr "now"
 
-#: usr/share/por-ai/ui/window.py:2094
+#: usr/share/por-ai/ui/window.py:2124
 #, python-brace-format
 msgid "há {n} min"
 msgstr "{n} min ago"
 
-#: usr/share/por-ai/ui/window.py:2096
+#: usr/share/por-ai/ui/window.py:2126
 #, python-brace-format
 msgid "há {n} h"
 msgstr "{n} h ago"
 
-#: usr/share/por-ai/ui/window.py:2098
+#: usr/share/por-ai/ui/window.py:2128
 msgid "ontem"
 msgstr "yesterday"
 
-#: usr/share/por-ai/ui/window.py:2101
+#: usr/share/por-ai/ui/window.py:2131
 #, python-brace-format
 msgid "há {n} dia"
 msgid_plural "há {n} dias"
@@ -1071,48 +1108,93 @@ msgstr[0] "{n} day ago"
 msgstr[1] "{n} days ago"
 
 #. TRANSLATORS: formato de data do strftime (ex.: %m/%d/%Y em inglês).
-#: usr/share/por-ai/ui/window.py:2103
+#: usr/share/por-ai/ui/window.py:2133
 msgid "%d/%m/%Y"
 msgstr "%m/%d/%Y"
 
-#: usr/share/por-ai/ui/window.py:2116
+#: usr/share/por-ai/ui/window.py:2146
 msgid "Não foi possível abrir a conversa."
 msgstr "Could not open the conversation."
 
-#: usr/share/por-ai/ui/window.py:2191
+#: usr/share/por-ai/ui/window.py:2222
 msgid "Renomear conversa"
 msgstr "Rename conversation"
 
-#: usr/share/por-ai/ui/window.py:2192
+#: usr/share/por-ai/ui/window.py:2223
 msgid "Digite o novo nome:"
 msgstr "Type the new name:"
 
-#: usr/share/por-ai/ui/window.py:2193
+#: usr/share/por-ai/ui/window.py:2224
 msgid "Cancelar"
 msgstr "Cancel"
 
-#: usr/share/por-ai/ui/window.py:2228
+#: usr/share/por-ai/ui/window.py:2270
+msgid "Conversas do POR.ai (JSON)"
+msgstr "POR.ai conversations (JSON)"
+
+#: usr/share/por-ai/ui/window.py:2275
+msgid "Todos os arquivos"
+msgstr "All files"
+
+#: usr/share/por-ai/ui/window.py:2289
+msgid "Abra uma conversa para exportar."
+msgstr "Open a conversation to export."
+
+#: usr/share/por-ai/ui/window.py:2297
+msgid "Exportar conversa"
+msgstr "Export conversation"
+
+#: usr/share/por-ai/ui/window.py:2315
+msgid "Não foi possível salvar nesse local."
+msgstr "Could not save to that location."
+
+#: usr/share/por-ai/ui/window.py:2321
+msgid "Falha ao exportar a conversa."
+msgstr "Failed to export the conversation."
+
+#: usr/share/por-ai/ui/window.py:2324
+#, python-brace-format
+msgid "Conversa exportada para {name}."
+msgstr "Conversation exported to {name}."
+
+#: usr/share/por-ai/ui/window.py:2329
+msgid "Importar conversa"
+msgstr "Import conversation"
+
+#: usr/share/por-ai/ui/window.py:2342
+msgid "Não foi possível abrir esse arquivo."
+msgstr "Could not open that file."
+
+#: usr/share/por-ai/ui/window.py:2351
+msgid "Não foi possível ler o arquivo."
+msgstr "Could not read the file."
+
+#: usr/share/por-ai/ui/window.py:2359
+msgid "Conversa importada."
+msgstr "Conversation imported."
+
+#: usr/share/por-ai/ui/window.py:2363
 msgid "Configure a chave da API para buscar modelos."
 msgstr "Set up the API key to fetch models."
 
-#: usr/share/por-ai/ui/window.py:2231
+#: usr/share/por-ai/ui/window.py:2366
 msgid "O catálogo de modelos já está sendo atualizado…"
 msgstr "The model catalog is already being updated…"
 
-#: usr/share/por-ai/ui/window.py:2233
+#: usr/share/por-ai/ui/window.py:2368
 msgid "Buscando catálogo de modelos…"
 msgstr "Fetching model catalog…"
 
-#: usr/share/por-ai/ui/window.py:2277
+#: usr/share/por-ai/ui/window.py:2412
 msgid ""
 "Nenhum modelo com retenção zero disponível. A lista anterior foi mantida."
 msgstr "No zero retention model available. The previous list was kept."
 
-#: usr/share/por-ai/ui/window.py:2281
+#: usr/share/por-ai/ui/window.py:2416
 msgid "Nenhum modelo retornado."
 msgstr "No models returned."
 
-#: usr/share/por-ai/ui/window.py:2299
+#: usr/share/por-ai/ui/window.py:2434
 #, python-brace-format
 msgid "Catálogo atualizado automaticamente: {n} modelo com retenção zero."
 msgid_plural ""
@@ -1120,49 +1202,49 @@ msgid_plural ""
 msgstr[0] "Catalog updated automatically: {n} zero retention model."
 msgstr[1] "Catalog updated automatically: {n} zero retention models."
 
-#: usr/share/por-ai/ui/window.py:2304
+#: usr/share/por-ai/ui/window.py:2439
 #, python-brace-format
 msgid "Catálogo atualizado automaticamente: {n} modelo."
 msgid_plural "Catálogo atualizado automaticamente: {n} modelos."
 msgstr[0] "Catalog updated automatically: {n} model."
 msgstr[1] "Catalog updated automatically: {n} models."
 
-#: usr/share/por-ai/ui/window.py:2308
+#: usr/share/por-ai/ui/window.py:2443
 #, python-brace-format
 msgid "{n} modelo disponível com retenção zero."
 msgid_plural "{n} modelos disponíveis com retenção zero."
 msgstr[0] "{n} zero retention model available."
 msgstr[1] "{n} zero retention models available."
 
-#: usr/share/por-ai/ui/window.py:2311
+#: usr/share/por-ai/ui/window.py:2446
 #, python-brace-format
 msgid "{n} modelo disponível."
 msgid_plural "{n} modelos disponíveis."
 msgstr[0] "{n} model available."
 msgstr[1] "{n} models available."
 
-#: usr/share/por-ai/ui/window.py:2332
+#: usr/share/por-ai/ui/window.py:2467
 msgid "Verificação de atualizações não disponível."
 msgstr "Update check not available."
 
-#: usr/share/por-ai/ui/window.py:2334
+#: usr/share/por-ai/ui/window.py:2469
 msgid "Verificando atualizações…"
 msgstr "Checking for updates…"
 
-#: usr/share/por-ai/ui/window.py:2340
+#: usr/share/por-ai/ui/window.py:2475
 msgid "O POR.ai já está na versão mais recente."
 msgstr "POR.ai is already up to date."
 
-#: usr/share/por-ai/ui/window.py:2343
+#: usr/share/por-ai/ui/window.py:2478
 #, python-brace-format
 msgid "Não foi possível verificar atualizações: {error}"
 msgstr "Could not check for updates: {error}"
 
-#: usr/share/por-ai/ui/window.py:2429
+#: usr/share/por-ai/ui/window.py:2564
 msgid "Antes: quem pode receber suas mensagens?"
 msgstr "First: who can receive your messages?"
 
-#: usr/share/por-ai/ui/window.py:2430
+#: usr/share/por-ai/ui/window.py:2565
 msgid ""
 "Com Retenção zero, só aparecem modelos com provedores que não guardam nem "
 "treinam com elas. Você pode mudar isso depois em Preferências ▸ OpenRouter ▸"
@@ -1172,11 +1254,11 @@ msgstr ""
 "them are shown. You can change this later in Preferences ▸ OpenRouter ▸ "
 "Privacy."
 
-#: usr/share/por-ai/ui/window.py:2451
+#: usr/share/por-ai/ui/window.py:2586
 msgid "Próximo passo: carregar os modelos"
 msgstr "Next step: load the models"
 
-#: usr/share/por-ai/ui/window.py:2452
+#: usr/share/por-ai/ui/window.py:2587
 msgid ""
 "Clique em Atualizar agora. Depois, você pode atualizar por este menu quando "
 "quiser, ou deixar automático: o app atualiza ao abrir, no máximo uma vez por"
@@ -1185,19 +1267,19 @@ msgstr ""
 "Click Update now. Later, you can update from this menu whenever you want, or"
 " leave it automatic: the app updates when it opens, at most once a day."
 
-#: usr/share/por-ai/ui/window.py:2456
+#: usr/share/por-ai/ui/window.py:2591
 msgid "Deixar automático"
 msgstr "Leave automatic"
 
-#: usr/share/por-ai/ui/window.py:2457
+#: usr/share/por-ai/ui/window.py:2592
 msgid "Atualizar agora"
 msgstr "Update now"
 
-#: usr/share/por-ai/ui/window.py:2492
+#: usr/share/por-ai/ui/window.py:2627
 msgid "Deixe o POR.ai do seu jeito"
 msgstr "Make POR.ai your own"
 
-#: usr/share/por-ai/ui/window.py:2493
+#: usr/share/por-ai/ui/window.py:2628
 msgid ""
 "Neste menu, em Preferências, você configura o comportamento da IA. Em Temas,"
 " altera as cores da interface."
@@ -1205,31 +1287,31 @@ msgstr ""
 "In this menu, Preferences sets how the AI behaves. Themes changes the "
 "interface colors."
 
-#: usr/share/por-ai/ui/window.py:2495
+#: usr/share/por-ai/ui/window.py:2630
 msgid "Próximo"
 msgstr "Next"
 
-#: usr/share/por-ai/ui/window.py:2508
+#: usr/share/por-ai/ui/window.py:2643
 msgid "Escolha o modelo"
 msgstr "Choose the model"
 
-#: usr/share/por-ai/ui/window.py:2509
+#: usr/share/por-ai/ui/window.py:2644
 msgid "Clique aqui para escolher o modelo desejado."
 msgstr "Click here to choose the model you want."
 
-#: usr/share/por-ai/ui/window.py:2510
+#: usr/share/por-ai/ui/window.py:2645
 msgid "Entendi"
 msgstr "Got it"
 
-#: usr/share/por-ai/ui/window.py:2624
+#: usr/share/por-ai/ui/window.py:2759
 msgid "Configure sua chave da API do OpenRouter ou da Maritaca para começar."
 msgstr "Set up your OpenRouter or Maritaca API key to get started."
 
-#: usr/share/por-ai/ui/window.py:2649
+#: usr/share/por-ai/ui/window.py:2784
 msgid "Narayan L. Silva - feito com Claude Sonnet"
 msgstr "Narayan L. Silva - made with Claude Sonnet"
 
-#: usr/share/por-ai/ui/window.py:2651
+#: usr/share/por-ai/ui/window.py:2786
 msgid ""
 "Personal Own Router AI — um chat com modelos do OpenRouter e da Maritaca, "
 "rodando localmente para manter o controle dos seus arquivos."
