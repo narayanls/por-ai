@@ -73,6 +73,7 @@
   <content_rating type="oars-1.1" />
   <!-- Acrescente uma <release> no topo a cada versão nova. -->
   <releases>
+    <release version="0.2.0.2" date="2026-11-10" />
     <release version="0.2.0.1" date="2026-11-01" />
     <release version="0.1.9.4" date="2026-10-05" />
     <release version="0.1.9.3" date="2026-09-28" />
