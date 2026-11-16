@@ -56,6 +56,46 @@ from ui import color_schemes
 from ui.theme_window import ThemeWindow
 from core.i18n import _, ngettext, spellcheck_language
 
+
+# --- Contraste do campo de entrada (GtkSource.View) ----------------------
+# Cores como tuplas (r, g, b) em 0..1.
+
+def _rgba_to_rgb(rgba) -> tuple:
+    return (rgba.red, rgba.green, rgba.blue)
+
+
+def _rgb_to_hex(rgb) -> str:
+    return "#{:02x}{:02x}{:02x}".format(
+        *(max(0, min(255, round(c * 255))) for c in rgb)
+    )
+
+
+def _blend_over(fg, alpha: float, bg) -> tuple:
+    """Cor resultante de `fg` com opacidade `alpha` sobre `bg`."""
+    return tuple(f * alpha + b * (1 - alpha) for f, b in zip(fg, bg))
+
+
+def _luminance(rgb) -> float:
+    """Luminância relativa (WCAG 2)."""
+    def lin(c):
+        return c / 12.92 if c <= 0.03928 else ((c + 0.055) / 1.055) ** 2.4
+
+    r, g, b = (lin(c) for c in rgb)
+    return 0.2126 * r + 0.7152 * g + 0.0722 * b
+
+
+def _contrast(a, b) -> float:
+    la, lb = sorted((_luminance(a), _luminance(b)), reverse=True)
+    return (la + 0.05) / (lb + 0.05)
+
+
+def _readable_on(bg, fg, minimum: float = 4.5) -> tuple:
+    """Mantém `fg` se for legível sobre `bg`; senão, quase-preto ou branco."""
+    if _contrast(bg, fg) >= minimum:
+        return fg
+    dark, light = (0.12, 0.12, 0.12), (1.0, 1.0, 1.0)
+    return dark if _contrast(bg, dark) >= _contrast(bg, light) else light
+
 logger = logging.getLogger(__name__)
 
 try:
@@ -67,7 +107,7 @@ except Exception as _exc:  # pylint: disable=broad-except
     _UPDATE_AVAILABLE = False
 
 
-APP_VERSION = "0.2.0.2"
+APP_VERSION = "0.2.0.3"
 
 _CSS = b"""
 .message-bubble {
@@ -507,9 +547,16 @@ class PorAiWindow(Adw.ApplicationWindow):
             # Sincronizamos com o modo claro/escuro do sistema.
             self._apply_source_style_scheme()
             style_manager = Adw.StyleManager.get_default()
+            # O sinal chega antes de o GTK recalcular o CSS do novo modo;
+            # adiar para o idle evita ler as cores do modo anterior.
             style_manager.connect(
                 "notify::dark",
-                lambda *_: self._apply_source_style_scheme(),
+                lambda *_: self._schedule_source_style_scheme(),
+            )
+            # No KDE Plasma o modo escuro chega pelo portal depois da criação
+            # da janela: reaplica quando o campo já estiver com o CSS final.
+            self._input_view.connect(
+                "map", lambda *_: self._schedule_source_style_scheme()
             )
         self._input_view.set_accepts_tab(False)
         self._input_view.set_top_margin(8)
@@ -615,6 +662,14 @@ class PorAiWindow(Adw.ApplicationWindow):
                   "(custo extra; desliga sozinho após o envio)")
             )
 
+    def _schedule_source_style_scheme(self) -> None:
+        """Reaplica o style scheme no próximo ciclo ocioso (CSS já atualizado)."""
+        def run():
+            self._apply_source_style_scheme()
+            return False  # GLib.idle_add: não repetir
+
+        GLib.idle_add(run)
+
     def _apply_source_style_scheme(self, scheme_id: Optional[str] = None) -> None:
         """Escolhe um style scheme do GtkSource que combine com o tema.
         """
@@ -671,17 +726,30 @@ class PorAiWindow(Adw.ApplicationWindow):
             if not (ok_bg and ok_fg):
                 return None
 
-            def to_hex(rgba):
-                return "#{:02x}{:02x}{:02x}".format(
-                    round(rgba.red * 255),
-                    round(rgba.green * 255),
-                    round(rgba.blue * 255),
-                )
+            bg_rgb = _rgba_to_rgb(bg_rgba)
+            # view_fg_color costuma ter transparência (ex.: rgba(0,0,0,0.8));
+            # mistura com o fundo para obter a cor que de fato aparece.
+            fg_rgb = _blend_over(_rgba_to_rgb(fg_rgba), fg_rgba.alpha, bg_rgb)
+            # Fundo e texto vêm de cores nomeadas diferentes e nada garante
+            # que combinem (no KDE Plasma já saiu texto branco em fundo
+            # branco). Se o contraste for ruim, usa preto ou branco.
+            fg_rgb = _readable_on(bg_rgb, fg_rgb)
 
-            bg = to_hex(bg_rgba)
-            fg = to_hex(fg_rgba)
-            accent = to_hex(accent_rgba) if ok_accent else fg
-            accent_fg = to_hex(accent_fg_rgba) if ok_accent_fg else bg
+            bg = _rgb_to_hex(bg_rgb)
+            fg = _rgb_to_hex(fg_rgb)
+            if ok_accent:
+                accent_rgb = _rgba_to_rgb(accent_rgba)
+                accent = _rgb_to_hex(accent_rgb)
+                accent_fg_rgb = (
+                    _rgba_to_rgb(accent_fg_rgba) if ok_accent_fg else bg_rgb
+                )
+                accent_fg = _rgb_to_hex(_readable_on(accent_rgb, accent_fg_rgb))
+            else:
+                accent, accent_fg = fg, bg
+            logger.debug(
+                "Scheme do sistema: bg=%s fg=%s (lido %s)",
+                bg, fg, fg_rgba.to_string(),
+            )
 
             xml = f"""<?xml version="1.0" encoding="UTF-8"?>
 <style-scheme id="porai-system" name="POR.ai — Sistema" version="1.0">

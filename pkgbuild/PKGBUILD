@@ -1,6 +1,6 @@
 # Maintainer: Narayan Lima da Silva <narayan.song@gmail.com>
 pkgname=por-ai
-pkgver=0.2.0.2
+pkgver=0.2.0.3
 pkgrel=1
 pkgdesc="Chat privado com modelos do OpenRouter (GTK4/Adwaita)"
 arch=('any')
@@ -20,11 +20,21 @@ depends=(
   'python-matplotlib'
   'libspelling'
   'hunspell'
-  'hunspell-pt-br'
-
 )
-# Pacote local: não baixa nada. Empacota a árvore usr/ que já existe no repo.
-# Por isso source=() está vazio e os arquivos são lidos de $startdir.
+optdepends=(
+  'hunspell-en_us'
+  'hunspell-es_es'
+)
+
+# O app é empacotado da árvore usr/ do repo (lida de $startdir). Só o
+# dicionário pt_BR é baixado, porque o hunspell-pt-br existe apenas no AUR.
+# Ele fica numa pasta própria (não em /usr/share/hunspell) para não conflitar
+# com o hunspell-pt-br; o lançador usr/bin/por-ai inclui essa pasta no
+# XDG_DATA_DIRS.
+_dict=https://raw.githubusercontent.com/LibreOffice/dictionaries/libreoffice-26.8.1.1/pt_BR
+source=("$_dict/pt_BR.aff" "$_dict/pt_BR.dic")
+sha256sums=('21d8ad2a769a60e17e2b5ea4ef11d4d593a58b9e2a82d642ef82d6a4c5523865'
+            'a38bfb26b68ece2834e79fe83e48d5792652970ace12db89d1b9674bf9933183')
 
 package() {
   # Descobre onde está a pasta usr/ (funciona com o PKGBUILD na raiz do repo
@@ -52,4 +62,8 @@ package() {
   # Garante o bit de execução no launcher e no main.
   chmod 755 "$pkgdir/usr/bin/por-ai"
   chmod 755 "$pkgdir/usr/share/por-ai/main.py"
+
+  # Dicionário pt_BR embutido (ver comentário acima de source=).
+  install -Dm644 -t "$pkgdir/usr/share/por-ai/dicts/hunspell" \
+    "$srcdir/pt_BR.aff" "$srcdir/pt_BR.dic"
 }
