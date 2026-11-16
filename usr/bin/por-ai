@@ -1,3 +1,5 @@
 #!/bin/sh
 # Lançador do POR.ai.
+# Dicionário pt_BR embutido: o enchant procura em $XDG_DATA_DIRS/hunspell.
+export XDG_DATA_DIRS="/usr/share/por-ai/dicts:${XDG_DATA_DIRS:-/usr/local/share:/usr/share}"
 exec python3 /usr/share/por-ai/main.py "$@"
