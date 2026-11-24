@@ -25,7 +25,7 @@ Construído com Python + GTK4/Adwaita.
 
 ---
 ## Disclaimer
-Fiz este aplicativo para uso pessoal com auxílio de IA. Porém, como acredito que todo conhecimento é mais interessante quando compartilhado, decidi criar o repositório no Github sob licença GPL-3.0. Sendo assim, fique a vontade para reescrever todo o código sem auxílio de IA, se preferir, ou adicionar qualquer outra função que lhe seja útil.
+Fiz este aplicativo para uso pessoal usando IA para geração de código. Porém, como acredito que todo conhecimento é mais interessante quando compartilhado, decidi criar o repositório no Github sob licença GPL-3.0. Sendo assim, fique a vontade para reescrever todo o código sem IA, se preferir, ou adicionar qualquer outra função que lhe seja útil.
 
 
 ## Não se esqueça
