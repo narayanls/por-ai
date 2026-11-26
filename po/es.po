@@ -1335,3 +1335,49 @@ msgid ""
 msgstr ""
 "Personal Own Router AI: un chat con modelos de OpenRouter y Maritaca que se "
 "ejecuta localmente para que mantengas el control de tus archivos."
+
+#: usr/share/por-ai/ui/preferences.py:401
+msgid ""
+"Vale só para os modelos do OpenRouter. O esforço de raciocínio fica no "
+"botão 💭, ao lado do campo de mensagem, e é guardado em cada conversa."
+msgstr ""
+"Solo aplica a los modelos de OpenRouter. El esfuerzo de razonamiento está "
+"en el botón 💭, junto al campo de mensaje, y se guarda en cada conversación."
+
+#: usr/share/por-ai/ui/window.py:719
+msgid ""
+"Guardado nesta conversa. Conversas novas começam com o último nível "
+"escolhido."
+msgstr ""
+"Se guarda en esta conversación. Las conversaciones nuevas empiezan con el "
+"último nivel elegido."
+
+#: usr/share/por-ai/ui/window.py:816
+msgid "Na API da Maritaca, só o S5 permite ajustar o raciocínio."
+msgstr "En la API de Maritaca, solo S5 permite ajustar el razonamiento."
+
+#: usr/share/por-ai/ui/window.py:817
+msgid "Modelos de geração de imagem não usam esforço de raciocínio."
+msgstr "Los modelos de generación de imágenes no usan esfuerzo de razonamiento."
+
+#: usr/share/por-ai/ui/window.py:820
+msgid "Este modelo não permite ajustar o raciocínio."
+msgstr "Este modelo no permite ajustar el razonamiento."
+
+#: usr/share/por-ai/ui/window.py:826
+msgid "Esforço de raciocínio nesta conversa: {level}. {description}"
+msgstr "Esfuerzo de razonamiento en esta conversación: {level}. {description}"
+
+#: usr/share/por-ai/ui/window.py:834
+msgid "O S5 pensa sem mostrar o raciocínio, só a resposta."
+msgstr "S5 piensa sin mostrar el razonamiento, solo la respuesta."
+
+#: usr/share/por-ai/ui/preferences.py:251
+msgid ""
+"Nos modelos da Maritaca não há pesquisa na web, filtro de privacidade nem "
+"prioridade do provedor: esses recursos são do OpenRouter. O esforço de "
+"raciocínio (botão 💭) funciona no S5."
+msgstr ""
+"En los modelos de Maritaca no hay búsqueda web, filtro de privacidad ni "
+"prioridad del proveedor: esas funciones son de OpenRouter. El esfuerzo de "
+"razonamiento (botón 💭) funciona en S5."

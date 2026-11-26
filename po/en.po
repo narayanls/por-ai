@@ -1318,3 +1318,48 @@ msgid ""
 msgstr ""
 "Personal Own Router AI — a chat with OpenRouter and Maritaca models, running"
 " locally so you stay in control of your files."
+
+#: usr/share/por-ai/ui/preferences.py:401
+msgid ""
+"Vale só para os modelos do OpenRouter. O esforço de raciocínio fica no "
+"botão 💭, ao lado do campo de mensagem, e é guardado em cada conversa."
+msgstr ""
+"Applies only to OpenRouter models. The reasoning effort is in the 💭 "
+"button, next to the message field, and is saved in each conversation."
+
+#: usr/share/por-ai/ui/window.py:719
+msgid ""
+"Guardado nesta conversa. Conversas novas começam com o último nível "
+"escolhido."
+msgstr ""
+"Saved in this conversation. New conversations start with the last level "
+"chosen."
+
+#: usr/share/por-ai/ui/window.py:816
+msgid "Na API da Maritaca, só o S5 permite ajustar o raciocínio."
+msgstr "On the Maritaca API, only S5 allows adjusting the reasoning."
+
+#: usr/share/por-ai/ui/window.py:817
+msgid "Modelos de geração de imagem não usam esforço de raciocínio."
+msgstr "Image generation models don't use reasoning effort."
+
+#: usr/share/por-ai/ui/window.py:820
+msgid "Este modelo não permite ajustar o raciocínio."
+msgstr "This model doesn't allow adjusting its reasoning."
+
+#: usr/share/por-ai/ui/window.py:826
+msgid "Esforço de raciocínio nesta conversa: {level}. {description}"
+msgstr "Reasoning effort in this conversation: {level}. {description}"
+
+#: usr/share/por-ai/ui/window.py:834
+msgid "O S5 pensa sem mostrar o raciocínio, só a resposta."
+msgstr "S5 thinks without showing its reasoning, only the answer."
+
+#: usr/share/por-ai/ui/preferences.py:251
+msgid ""
+"Nos modelos da Maritaca não há pesquisa na web, filtro de privacidade nem "
+"prioridade do provedor: esses recursos são do OpenRouter. O esforço de "
+"raciocínio (botão 💭) funciona no S5."
+msgstr ""
+"Maritaca models have no web search, privacy filter or provider priority: "
+"those features belong to OpenRouter. Reasoning effort (💭 button) works on S5."

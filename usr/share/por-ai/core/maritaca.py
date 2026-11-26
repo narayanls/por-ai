@@ -43,6 +43,35 @@ def to_app_id(model: str) -> str:
     return model if is_maritaca_model(model) else f"{MARITACA_PREFIX}{model}"
 
 
+# Esforço de raciocínio na API da Maritaca: só o S5 aceita, pelo campo
+# ``reasoning_effort`` do /chat/completions (padrão da OpenAI, não o objeto
+# ``reasoning`` do OpenRouter). Valores aceitos: none, low (= minimal),
+# medium e xhigh (= high, o padrão). O Sabiá 4 Thinking sempre pensa e não
+# tem ajuste; Sabiá 4 e Sabiazinho 4 não pensam.
+# Fonte: https://docs.maritaca.ai/pt/primeiros-passos-s5
+_MARITACA_EFFORTS = {
+    "none": "none",
+    "minimal": "low",
+    "low": "low",
+    "medium": "medium",
+    "high": "xhigh",
+}
+
+
+def supports_reasoning_effort(model: str) -> bool:
+    """True se o modelo da Maritaca aceita ``reasoning_effort``: a família
+    S5 (``S5``, ``S5-free``, ``S5-br-sp``…)."""
+    return is_maritaca_model(model) and to_api_id(model).lower().startswith("s5")
+
+
+def reasoning_effort_param(model: str, effort: str) -> Optional[str]:
+    """Traduz o nível do botão 💭 para o valor da API da Maritaca. None =
+    não mandar o campo ("auto", ou um modelo sem ajuste de raciocínio)."""
+    if not supports_reasoning_effort(model):
+        return None
+    return _MARITACA_EFFORTS.get(effort)
+
+
 def to_api_id(model: str) -> str:
     """``maritaca/sabia-4`` → ``sabia-4`` (o nome que a API espera)."""
     model = (model or "").strip()
