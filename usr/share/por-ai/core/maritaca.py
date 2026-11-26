@@ -58,10 +58,24 @@ _MARITACA_EFFORTS = {
 }
 
 
+def _is_s5(model: str) -> bool:
+    """Família S5 da Maritaca (``S5``, ``S5-nano``, ``S5-free``,
+    ``S5-br-sp``…)."""
+    return is_maritaca_model(model) and to_api_id(model).lower().startswith("s5")
+
+
 def supports_reasoning_effort(model: str) -> bool:
     """True se o modelo da Maritaca aceita ``reasoning_effort``: a família
-    S5 (``S5``, ``S5-free``, ``S5-br-sp``…)."""
-    return is_maritaca_model(model) and to_api_id(model).lower().startswith("s5")
+    S5."""
+    return _is_s5(model)
+
+
+def accepts_temperature(model: str) -> bool:
+    """False para a família S5: como os modelos de raciocínio da OpenAI, ela
+    só aceita a temperatura padrão (1) e responde HTTP 400 ("Unsupported
+    value: 'temperature' does not support 0.5 with this model") a qualquer
+    outro valor. Nesses modelos o campo nem é enviado."""
+    return not _is_s5(model)
 
 
 def reasoning_effort_param(model: str, effort: str) -> Optional[str]:
