@@ -12,6 +12,7 @@ Estrutura de uma conversa::
       "created_at": 1719250000.0,
       "updated_at": 1719250500.0,
       "model": "openrouter/auto",
+      "reasoning_effort": "auto",
       "messages": [
         {"role": "user", "content": "<enviado à API>", "display": "<mostrado>"},
         {"role": "assistant", "content": "…", "display": "…"}
@@ -21,6 +22,10 @@ Estrutura de uma conversa::
 Para mensagens do usuário, ``content`` pode conter o texto dos arquivos
 anexados, enquanto ``display`` mostra apenas o texto digitado + os nomes dos
 anexos. Para o assistente, ``content`` e ``display`` são iguais.
+
+``reasoning_effort`` é o esforço de raciocínio escolhido no botão 💭 para
+aquela conversa (um dos valores de ``REASONING_EFFORT_CHOICES``). Conversas
+antigas não têm o campo; nelas vale o padrão das conversas novas.
 """
 
 from __future__ import annotations
@@ -33,6 +38,7 @@ import uuid
 from typing import Any, Dict, List, Optional
 
 from gi.repository import GLib
+from core.config import REASONING_EFFORT_CHOICES
 from core.i18n import _
 
 logger = logging.getLogger(__name__)
@@ -111,6 +117,32 @@ class ConversationStore:
         if not conv_id:
             return
         conversation["updated_at"] = time.time()
+        self._write(conversation)
+
+    def update_fields(self, conv_id: str, fields: Dict[str, Any]) -> bool:
+        """Grava ``fields`` numa conversa já salva SEM mexer em
+        ``updated_at``: trocar uma opção (ex.: o esforço de raciocínio) não
+        deve fazer a conversa pular para o topo da lista. Devolve False se a
+        conversa não existir em disco."""
+        data = self.load(conv_id)
+        if data is None:
+            return False
+        data.update(fields)
+        self._write(data)
+        return True
+
+    @staticmethod
+    def clean_reasoning_effort(value: Any) -> Optional[str]:
+        """Devolve ``value`` se for um esforço de raciocínio válido; senão
+        None (conversa antiga ou arquivo editado à mão)."""
+        if isinstance(value, str) and value.strip().lower() in REASONING_EFFORT_CHOICES:
+            return value.strip().lower()
+        return None
+
+    def _write(self, conversation: Dict[str, Any]) -> None:
+        conv_id = conversation.get("id")
+        if not conv_id:
+            return
         path = self._path(conv_id)
         try:
             tmp = f"{path}.tmp"
@@ -154,6 +186,7 @@ class ConversationStore:
                 "created_at": conversation.get("created_at"),
                 "updated_at": conversation.get("updated_at"),
                 "model": conversation.get("model", ""),
+                "reasoning_effort": conversation.get("reasoning_effort"),
                 "messages": conversation.get("messages", []),
             },
         }
@@ -237,5 +270,8 @@ class ConversationStore:
             "model": model if isinstance(model, str) else "",
             "messages": messages,
         }
+        effort = self.clean_reasoning_effort(data.get("reasoning_effort"))
+        if effort is not None:
+            conversation["reasoning_effort"] = effort
         self.save(conversation)
         return conversation

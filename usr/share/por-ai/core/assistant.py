@@ -38,6 +38,7 @@ from gi.repository import GLib
 from core.config import REASONING_EFFORT_CHOICES, Config
 from core.maritaca import (
     MaritacaClient,
+    accepts_temperature,
     is_maritaca_model,
     reasoning_effort_param,
     supports_reasoning_effort,
@@ -324,6 +325,20 @@ class ChatAssistant:
             return False
         supported = entry.get("supported_parameters")
         return isinstance(supported, list) and "reasoning" in supported
+
+    @staticmethod
+    def _rejects_param(exc: Exception, name: str) -> bool:
+        """True se o erro é um HTTP 400 dizendo que o parâmetro ``name`` não
+        é aceito pelo modelo (formato da API da OpenAI, que a Maritaca
+        segue: "Unsupported value: 'temperature' ..." ou "Unsupported
+        parameter: 'temperature' ...")."""
+        message = str(exc)
+        lower = message.lower()
+        return (
+            "HTTP 400" in message
+            and name in message
+            and ("unsupported" in lower or "not support" in lower)
+        )
 
     def model_supports_reasoning(self, model: str) -> Optional[bool]:
         """Diz, SEM acessar a rede, se o modelo aceita controle de
@@ -675,11 +690,17 @@ class ChatAssistant:
                 else self.config.reasoning_effort
             )
 
+            # Temperatura das Preferências. None = não mandar o campo (o
+            # modelo usa o padrão dele).
+            temperature: Optional[float] = self.config.temperature
+
             if maritaca:
                 # A Maritaca recebe só parâmetros padrão da API da OpenAI
                 # (temperature, max_tokens e, no S5, reasoning_effort).
                 # ``reasoning`` e ``provider`` são extensões do OpenRouter e
-                # ficam de fora.
+                # ficam de fora. O S5 recusa temperatura diferente de 1.
+                if not accepts_temperature(model):
+                    temperature = None
                 max_tokens = self._resolve_max_tokens(client, model, messages)
                 maritaca_effort = reasoning_effort_param(model, effort)
                 if maritaca_effort:
@@ -745,7 +766,7 @@ class ChatAssistant:
                             on_delta=_wrapped_on_delta,
                             on_reasoning=_wrapped_on_reasoning,
                             should_cancel=self._cancel.is_set,
-                            temperature=self.config.temperature,
+                            temperature=temperature,
                             max_tokens=max_tokens,
                             **extra,
                         )
@@ -753,7 +774,7 @@ class ChatAssistant:
                         full, images, usage, reasoning = client.chat(
                             model=model,
                             messages=messages,
-                            temperature=self.config.temperature,
+                            temperature=temperature,
                             max_tokens=max_tokens,
                             **extra,
                         )
@@ -767,6 +788,27 @@ class ChatAssistant:
                 except OpenRouterError as exc:
                     if self._cancel.is_set():
                         raise
+                    # Garantia para modelos novos que a regra fixa ainda não
+                    # conhece: se a API recusar a temperatura ou o esforço de
+                    # raciocínio (HTTP 400 "Unsupported value/parameter"),
+                    # reenvia uma vez sem o campo. Não conta como tentativa.
+                    if not got_data:
+                        if temperature is not None and self._rejects_param(exc, "temperature"):
+                            logger.warning(
+                                "%s recusou temperature=%s; reenviando sem o campo.",
+                                model, temperature,
+                            )
+                            temperature = None
+                            attempt -= 1
+                            continue
+                        if "reasoning_effort" in extra and self._rejects_param(exc, "reasoning_effort"):
+                            logger.warning(
+                                "%s recusou reasoning_effort=%s; reenviando sem o campo.",
+                                model, extra["reasoning_effort"],
+                            )
+                            extra.pop("reasoning_effort")
+                            attempt -= 1
+                            continue
                     exhausted = attempt >= self._MAX_RETRY_ATTEMPTS
                     if not exc.retryable or got_data or exhausted:
                         raise
