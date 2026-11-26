@@ -24,19 +24,6 @@ from core.i18n import _
 # O rótulo é curto de propósito: o Adw.ComboRow corta com reticências o que
 # não cabe ao lado do título. A explicação da opção escolhida vai no
 # subtítulo da linha (que quebra linha) e no balão ao passar o mouse.
-_REASONING_OPTIONS = [
-    ("auto", _("Automático"),
-     _("Cada modelo usa o próprio padrão — o mais parecido com o chat no navegador.")),
-    ("none", _("Desligado"),
-     _("Responde sem pensar antes. Mais rápido; pode errar mais em tarefas "
-       "complexas. Em modelos que sempre pensam, usa o nível mais leve.")),
-    ("minimal", _("Mínimo"), _("Pensa o mínimo possível antes de responder.")),
-    ("low", _("Baixo"), _("Pensa pouco: bom equilíbrio entre rapidez e qualidade.")),
-    ("medium", _("Médio"), _("Pensa moderadamente antes de responder.")),
-    ("high", _("Alto"),
-     _("Pensa bastante: melhor para problemas difíceis, mas bem mais lento e caro.")),
-]
-
 _PROVIDER_SORT_OPTIONS = [
     ("", _("Padrão"),
      _("Deixa o OpenRouter escolher, priorizando os provedores mais baratos.")),
@@ -262,8 +249,8 @@ class PreferencesWindow(Adw.PreferencesWindow):
         notes_group = Adw.PreferencesGroup()
         notes_group.set_description(
             _("Nos modelos da Maritaca não há pesquisa na web, filtro de "
-              "privacidade, prioridade do provedor nem controle do esforço de "
-              "raciocínio: esses recursos são do OpenRouter.")
+              "privacidade nem prioridade do provedor: esses recursos são do "
+              "OpenRouter. O esforço de raciocínio (botão 💭) funciona no S5.")
         )
         page.add(notes_group)
 
@@ -407,19 +394,14 @@ class PreferencesWindow(Adw.PreferencesWindow):
 
     def _build_speed_group(self) -> Adw.PreferencesGroup:
         group = Adw.PreferencesGroup()
-        group.set_title(_("Velocidade e raciocínio"))
+        group.set_title(_("Velocidade"))
+        # O esforço de raciocínio saiu daqui: agora é o botão 💭 ao lado do
+        # campo de mensagem, guardado em cada conversa (ver ui/window.py).
         group.set_description(
-            _("Modelos que “pensam” antes de responder ficam mais lentos quanto "
-              "maior o esforço. O tempo gasto em cada etapa aparece no chat. "
-              "Estas duas opções valem só para os modelos do OpenRouter.")
+            _("Vale só para os modelos que suportam essa função. O esforço de raciocínio "
+              "fica no botão 💭, ao lado do campo de mensagem, e é guardado "
+              "em cada conversa.")
         )
-
-        self._reasoning_row = self._make_combo_row(
-            _("Esforço de raciocínio"),
-            _REASONING_OPTIONS,
-            self.config.reasoning_effort,
-        )
-        group.add(self._reasoning_row)
 
         self._provider_sort_row = self._make_combo_row(
             _("Prioridade do provedor"),
@@ -480,9 +462,6 @@ class PreferencesWindow(Adw.PreferencesWindow):
         # Pelo setter: texto igual ao padrão não é gravado (ver Config).
         self.config.system_prompt = self._buffer_text(self._prompt_view)
         self.config.set("show_tray_icon", self._tray_row.get_active())
-        self.config.reasoning_effort = self._combo_value(
-            self._reasoning_row, _REASONING_OPTIONS
-        )
         self.config.provider_sort = self._combo_value(
             self._provider_sort_row, _PROVIDER_SORT_OPTIONS
         )

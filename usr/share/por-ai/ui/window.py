@@ -47,7 +47,7 @@ except (ValueError, ImportError):
     _HAS_SPELLING = False
 
 from core.assistant import ChatAssistant
-from core.config import Config
+from core.config import REASONING_EFFORT_CHOICES, Config
 from core.maritaca import is_maritaca_model, to_api_id
 from core.storage import ConversationStore
 from ui.message_row import MessageRow
@@ -55,6 +55,24 @@ from ui.preferences import PreferencesWindow
 from ui import color_schemes
 from ui.theme_window import ThemeWindow
 from core.i18n import _, ngettext, spellcheck_language
+
+
+# Níveis do botão 💭 (esforço de raciocínio): (valor gravado, rótulo curto,
+# explicação). Vieram de ui/preferences.py com os mesmos textos, então as
+# traduções existentes continuam valendo.
+_REASONING_OPTIONS = [
+    ("auto", _("Automático"),
+     _("Cada modelo usa o próprio padrão — o mais parecido com o chat no navegador.")),
+    ("none", _("Desligado"),
+     _("Responde sem pensar antes. Mais rápido; pode errar mais em tarefas "
+       "complexas. Em modelos que sempre pensam, usa o nível mais leve.")),
+    ("minimal", _("Mínimo"), _("Pensa o mínimo possível antes de responder.")),
+    ("low", _("Baixo"), _("Pensa pouco: bom equilíbrio entre rapidez e qualidade.")),
+    ("medium", _("Médio"), _("Pensa moderadamente antes de responder.")),
+    ("high", _("Alto"),
+     _("Pensa bastante: melhor para problemas difíceis, mas bem mais lento e caro.")),
+]
+_REASONING_LABELS = {value: (label, desc) for value, label, desc in _REASONING_OPTIONS}
 
 
 # --- Contraste do campo de entrada (GtkSource.View) ----------------------
@@ -107,7 +125,7 @@ except Exception as _exc:  # pylint: disable=broad-except
     _UPDATE_AVAILABLE = False
 
 
-APP_VERSION = "0.2.0.3"
+APP_VERSION = "0.2.0.4"
 
 _CSS = b"""
 .message-bubble {
@@ -152,6 +170,12 @@ class PorAiWindow(Adw.ApplicationWindow):
         self._messages: List[Dict[str, str]] = []
         self._current_conv_id: Optional[str] = None
         self._created_at: Optional[float] = None
+        # Esforço de raciocínio da conversa aberta (botão 💭 ao lado do
+        # "Enviar"). É guardado em cada conversa; conversas novas começam
+        # com o último nível escolhido, que fica na config.
+        self._reasoning_effort: str = self.config.reasoning_effort
+        self._reasoning_checks: Dict[str, Gtk.CheckButton] = {}
+        self._syncing_reasoning = False
         # Arquivos aguardando envio na próxima mensagem (até MAX_ATTACHMENTS).
         self._pending_attachments: List[str] = []
         # Bolha do assistente em construção durante o streaming.
@@ -612,6 +636,18 @@ class PorAiWindow(Adw.ApplicationWindow):
         self._update_web_search_button()
         row.append(self._web_search_button)
 
+        # Esforço de raciocínio — fica aqui, e não em Preferências, para dar
+        # para trocar no meio do trabalho. Diferente da pesquisa na web, a
+        # escolha não volta sozinha: é guardada na conversa (ver
+        # _set_reasoning_effort).
+        self._reasoning_button = Gtk.MenuButton()
+        self._reasoning_button.add_css_class("flat")
+        self._reasoning_button.set_valign(Gtk.Align.END)
+        self._reasoning_button.set_direction(Gtk.ArrowType.UP)
+        self._reasoning_button.set_popover(self._build_reasoning_popover())
+        self._update_reasoning_button()
+        row.append(self._reasoning_button)
+
         self._send_button = Gtk.Button()
         self._send_button.set_icon_name("send-to-symbolic")
         self._send_button.set_tooltip_text(_("Enviar (Enter)"))
@@ -661,6 +697,142 @@ class PorAiWindow(Adw.ApplicationWindow):
                 _("Pesquisar na web nesta mensagem e mostrar as fontes "
                   "(custo extra; desliga sozinho após o envio)")
             )
+
+    # ------------------------------------------------------------------ #
+    # Esforço de raciocínio (botão 💭, guardado em cada conversa)          #
+    # ------------------------------------------------------------------ #
+
+    def _build_reasoning_popover(self) -> Gtk.Popover:
+        popover = Gtk.Popover()
+
+        box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=6)
+        box.set_margin_top(6)
+        box.set_margin_bottom(6)
+        box.set_margin_start(6)
+        box.set_margin_end(6)
+
+        title = Gtk.Label(label=_("Esforço de raciocínio"), xalign=0)
+        title.add_css_class("heading")
+        box.append(title)
+
+        caption = Gtk.Label(
+            label=_("Guardado nesta conversa. Conversas novas começam com o "
+                    "último nível escolhido."),
+            xalign=0,
+            wrap=True,
+        )
+        caption.add_css_class("dim-label")
+        caption.add_css_class("caption")
+        box.append(caption)
+
+        listbox = Gtk.ListBox()
+        listbox.set_selection_mode(Gtk.SelectionMode.NONE)
+        listbox.add_css_class("boxed-list")
+        group: Optional[Gtk.CheckButton] = None
+        for value, label, description in _REASONING_OPTIONS:
+            check = Gtk.CheckButton()
+            check.set_valign(Gtk.Align.CENTER)
+            if group is None:
+                group = check
+            else:
+                check.set_group(group)  # vira botão de rádio
+            check.connect("toggled", self._on_reasoning_check_toggled, value)
+            self._reasoning_checks[value] = check
+
+            row = Adw.ActionRow()
+            row.set_use_markup(False)
+            row.set_title(label)
+            row.set_subtitle(description)
+            row.add_prefix(check)
+            row.set_activatable_widget(check)
+            listbox.append(row)
+        box.append(listbox)
+
+        # A largura fixa faz as explicações quebrarem linha em vez de
+        # esticarem o balão pela janela inteira.
+        scroller = Gtk.ScrolledWindow()
+        scroller.set_policy(Gtk.PolicyType.NEVER, Gtk.PolicyType.AUTOMATIC)
+        scroller.set_min_content_width(340)
+        scroller.set_max_content_height(560)
+        scroller.set_propagate_natural_height(True)
+        scroller.set_child(box)
+        popover.set_child(scroller)
+        return popover
+
+    def _on_reasoning_check_toggled(self, check: Gtk.CheckButton, value: str) -> None:
+        # Num grupo de rádio, o botão que desliga também emite "toggled".
+        if self._syncing_reasoning or not check.get_active():
+            return
+        self._set_reasoning_effort(value)
+        GLib.idle_add(self._dismiss_reasoning_popover)
+
+    def _dismiss_reasoning_popover(self) -> bool:
+        self._reasoning_button.popdown()
+        self._input_view.grab_focus()
+        return False  # chamado via GLib.idle_add: não reagendar
+
+    def _set_reasoning_effort(self, value: str) -> None:
+        if value not in REASONING_EFFORT_CHOICES:
+            value = "auto"
+        self._reasoning_effort = value
+        # Vira o ponto de partida das conversas novas.
+        self.config.reasoning_effort = value
+        self.config.save()
+        # Conversa já salva: grava na hora, sem esperar a próxima mensagem
+        # (e sem mudar a ordem da lista lateral). Conversa nova ainda não
+        # tem arquivo; o valor vai junto no primeiro _persist.
+        if self._current_conv_id is not None:
+            self.store.update_fields(
+                self._current_conv_id, {"reasoning_effort": value}
+            )
+        self._update_reasoning_button()
+
+    def _update_reasoning_button(self) -> None:
+        """Mostra o nível da conversa no botão e marca a opção no balão.
+
+        Com um modelo da Maritaca que não seja S5 (só ele aceita o ajuste), de imagem ou que (pelo catálogo) não
+        pensa, o botão fica desativado — mas a escolha da conversa é
+        mantida."""
+        if not hasattr(self, "_reasoning_button"):
+            return  # ainda montando a interface
+        effort = self._reasoning_effort
+        label, description = _REASONING_LABELS.get(
+            effort, _REASONING_LABELS["auto"]
+        )
+        self._reasoning_button.set_label(f"💭 {label}")
+
+        self._syncing_reasoning = True
+        try:
+            check = self._reasoning_checks.get(effort)
+            if check is not None and not check.get_active():
+                check.set_active(True)
+        finally:
+            self._syncing_reasoning = False
+
+        model = self._current_model() or ""
+        supports = self.assistant.model_supports_reasoning(model)
+        maritaca = is_maritaca_model(model)
+        if maritaca and not supports:
+            reason = _("Na API da Maritaca, só o S5 permite ajustar o raciocínio.")
+        elif self.assistant._is_image_model(model):
+            reason = _("Modelos de geração de imagem não usam esforço de "
+                       "raciocínio.")
+        elif supports is False:
+            reason = _("Este modelo não permite ajustar o raciocínio.")
+        else:
+            reason = None
+        self._reasoning_button.set_sensitive(reason is None)
+        if reason:
+            tooltip = reason
+        else:
+            tooltip = _("Esforço de raciocínio nesta conversa: {level}. {description}").format(
+                level=label, description=description
+            )
+            if maritaca:
+                # A API da Maritaca não devolve o raciocínio do S5: o bloco
+                # 💭 não aparece, só a resposta demora mais.
+                tooltip += " " + _("O S5 pensa sem mostrar o raciocínio, só a resposta.")
+        self._reasoning_button.set_tooltip_text(tooltip)
 
     def _schedule_source_style_scheme(self) -> None:
         """Reaplica o style scheme no próximo ciclo ocioso (CSS já atualizado)."""
@@ -1028,6 +1200,7 @@ class PorAiWindow(Adw.ApplicationWindow):
             self.config.default_model = model_id
             self.config.save()
             self._update_web_search_button()
+            self._update_reasoning_button()
         # fecha pelo MenuButton
         GLib.idle_add(self._dismiss_model_popover)
 
@@ -1066,6 +1239,7 @@ class PorAiWindow(Adw.ApplicationWindow):
         if model_id not in self._model_list:
             self._model_list.insert(0, model_id)
         self._update_web_search_button()
+        self._update_reasoning_button()
 
     def _current_model(self) -> str:
         return self._selected_model_id or self.config.default_model
@@ -1245,6 +1419,7 @@ class PorAiWindow(Adw.ApplicationWindow):
             on_reasoning=self._on_reasoning,
             on_retry=self._on_retry,
             web_search=web_search,
+            reasoning_effort=self._reasoning_effort,
         )
         if started:
             # Desliga só depois que o pedido saiu: se o envio falhar antes
@@ -1571,6 +1746,9 @@ class PorAiWindow(Adw.ApplicationWindow):
             self._send_button.set_tooltip_text(_("Enviar (Enter)"))
             self._send_button.remove_css_class("destructive-action")
             self._send_button.add_css_class("suggested-action")
+        # Aproveita para reavaliar o botão 💭: o catálogo de modelos (que diz
+        # se o modelo pensa) pode ter chegado depois da troca de modelo.
+        self._update_reasoning_button()
 
     def _scroll_to_bottom(self, force: bool = False) -> None:
         """Rola a área de mensagens pro final.
@@ -2026,6 +2204,7 @@ class PorAiWindow(Adw.ApplicationWindow):
         self._messages = []
         self._current_conv_id = None
         self._created_at = None
+        self._reasoning_effort = self.config.reasoning_effort
         self._clear_attachments()
 
         child = self._messages_box.get_first_child()
@@ -2094,6 +2273,7 @@ class PorAiWindow(Adw.ApplicationWindow):
             "created_at": self._created_at or time.time(),
             "updated_at": time.time(),
             "model": self._current_model(),
+            "reasoning_effort": self._reasoning_effort,
             "messages": self._messages,
         }
 
@@ -2223,6 +2403,12 @@ class PorAiWindow(Adw.ApplicationWindow):
 
         self._current_conv_id = conv_id
         self._created_at = float(data.get("created_at", 0) or time.time())
+        # Conversas de antes do botão 💭 não têm o campo: usam o padrão das
+        # conversas novas.
+        self._reasoning_effort = (
+            self.store.clean_reasoning_effort(data.get("reasoning_effort"))
+            or self.config.reasoning_effort
+        )
         self._messages = [
             {
                 "role": m.get("role", "user"),

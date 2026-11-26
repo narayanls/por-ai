@@ -35,8 +35,13 @@ from typing import Any, Callable, Dict, List, Optional, Tuple
 
 from gi.repository import GLib
 
-from core.config import Config
-from core.maritaca import MaritacaClient, is_maritaca_model
+from core.config import REASONING_EFFORT_CHOICES, Config
+from core.maritaca import (
+    MaritacaClient,
+    is_maritaca_model,
+    reasoning_effort_param,
+    supports_reasoning_effort,
+)
 from core.openrouter import OpenRouterClient, OpenRouterError, web_search_tool
 
 # ── Dependências opcionais ────────────────────────────────────────────────────
@@ -320,6 +325,27 @@ class ChatAssistant:
         supported = entry.get("supported_parameters")
         return isinstance(supported, list) and "reasoning" in supported
 
+    def model_supports_reasoning(self, model: str) -> Optional[bool]:
+        """Diz, SEM acessar a rede, se o modelo aceita controle de
+        raciocínio: True/False pelo catálogo já baixado (ou pela regra da
+        Maritaca), ou None quando o catálogo ainda não chegou ou não conhece
+        o modelo. Usado pela UI
+        para desativar o botão 💭 nos modelos que não pensam.
+
+        Não pega ``_model_cache_lock`` de propósito: esse lock fica preso
+        durante o download do catálogo, e a UI travaria esperando. Ler o
+        dicionário sem ele é seguro — o cache de cada provedor é trocado
+        inteiro, nunca alterado aos pedaços."""
+        if not model:
+            return None
+        if is_maritaca_model(model):
+            # Na Maritaca a regra é fixa (só o S5 ajusta), não vem do catálogo.
+            return supports_reasoning_effort(model)
+        entry = (self._model_cache.get("openrouter") or {}).get(model)
+        if entry is None:
+            return None
+        return self._model_supports_reasoning_control(entry)
+
     @staticmethod
     def _build_reasoning_param(
         effort: str, entry: Optional[Dict[str, Any]]
@@ -504,6 +530,10 @@ class ChatAssistant:
         # ficar desligado depois de cada mensagem — de propósito, para a
         # busca (que tem custo extra) nunca ficar ligada por esquecimento.
         web_search: bool = False,
+        # reasoning_effort: esforço de raciocínio da conversa (botão 💭 ao
+        # lado do "Enviar", guardado em cada conversa). None = usa o padrão
+        # da config.
+        reasoning_effort: Optional[str] = None,
     ) -> bool:
         with self._lock:
             if self._inflight:
@@ -514,7 +544,7 @@ class ChatAssistant:
         threading.Thread(
             target=self._worker,
             args=(model, messages, on_delta, on_done, on_error, on_usage, on_reasoning, on_retry),
-            kwargs={"web_search": web_search},
+            kwargs={"web_search": web_search, "reasoning_effort": reasoning_effort},
             daemon=True,
         ).start()
         return True
@@ -591,6 +621,7 @@ class ChatAssistant:
         on_reasoning: Optional[Callable[[str], None]] = None,
         on_retry: Optional[Callable[[int, int, float], None]] = None,
         web_search: bool = False,
+        reasoning_effort: Optional[str] = None,
     ) -> None:
         try:
             maritaca = is_maritaca_model(model)
@@ -636,11 +667,23 @@ class ChatAssistant:
             if self._wants_cache_control(model):
                 extra["cache_control"] = dict(self._CACHE_CONTROL)
 
+            # Esforço de raciocínio da conversa (botão 💭); sem ele, o padrão
+            # da config.
+            effort = (
+                reasoning_effort
+                if reasoning_effort in REASONING_EFFORT_CHOICES
+                else self.config.reasoning_effort
+            )
+
             if maritaca:
                 # A Maritaca recebe só parâmetros padrão da API da OpenAI
-                # (temperature, max_tokens). ``reasoning`` e ``provider`` são
-                # extensões do OpenRouter e ficam de fora.
+                # (temperature, max_tokens e, no S5, reasoning_effort).
+                # ``reasoning`` e ``provider`` são extensões do OpenRouter e
+                # ficam de fora.
                 max_tokens = self._resolve_max_tokens(client, model, messages)
+                maritaca_effort = reasoning_effort_param(model, effort)
+                if maritaca_effort:
+                    extra["reasoning_effort"] = maritaca_effort
             elif self._is_image_model(model):
                 extra["modalities"] = ["image", "text"]
                 # Não força max_tokens pra modelos de imagem: o valor
@@ -657,7 +700,7 @@ class ChatAssistant:
                 # nível. Com um nível (effort), o próprio OpenRouter reserva
                 # a fatia da resposta final (ex.: "high" usa ~80% do teto).
                 reasoning = self._build_reasoning_param(
-                    self.config.reasoning_effort,
+                    effort,
                     self._get_model_entry(client, model),
                 )
                 if reasoning:
