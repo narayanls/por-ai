@@ -63,7 +63,7 @@ Steps 2 and 3 appear as popovers right after you confirm the key.
 - **Brazilian models** — with a Maritaca key, the Sabiá models (`maritaca/sabia-4`, `maritaca/sabiazinho-4`…) show up in the same selector, next to the OpenRouter models
 - **Real-time streaming** — responses appear as they are written, with a button to stop them
 - **Rendered Markdown** — bold, italics, code, headings.
-- **Attachments** — up to 6 files per message: PDF, ODT, TXT, MD, ODS, XLSX, CSV, JSON, PY, TOML, KDL and images (PNG, JPG, WebP, SVG)
+- **Attachments** — up to 8 files per message: PDF, ODT, TXT, MD, ODS, XLSX, CSV, JSON, PY, TOML, KDL, LUA, SH, BASH, FISH and images (PNG, JPG, WebP, SVG)
 - **Multimodal** — send images as input for compatible models
   to analyze (GPT-4o, Claude, Gemini, etc.)
 - **Web search with sources** — the 🌐 button next to "Send" turns on OpenRouter's web search (`openrouter:web_search`) for the next message only; the pages consulted appear numbered, with links, at the end of the response. The button turns itself off after each message, because search has an extra cost. It works with models that accept tools, e.g. Deepseek, Claude, Gemini, Qwen, Zai.
