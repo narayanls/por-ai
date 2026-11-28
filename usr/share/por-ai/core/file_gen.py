@@ -8,7 +8,11 @@ Quando o modelo entrega um arquivo inteiro, ele marca o bloco com o nome:
     ```
 
 O app grava o conteúdo em ``~/.local/share/por-ai/files/<id>/html_gen.py``
-e troca o bloco por um link. O arquivo já sai com o nome certo, e a pessoa
+e troca o bloco por um link. Todos os arquivos de uma mesma resposta vão
+para a mesma pasta ``<id>``: uma página dividida em index.html, style.css
+e script.js continua funcionando, porque as referências relativas entre
+eles batem. Cada resposta ganha uma pasta nova, então pedir ajustes nunca
+sobrescreve a versão anterior. O arquivo já sai com o nome certo, e a pessoa
 não precisa copiar da bolha (o que levava junto a cerca e o texto em
 volta) nem renderizar centenas de linhas de código no rótulo.
 
@@ -57,6 +61,12 @@ def capabilities_prompt() -> str:
         "Se o conteúdo do arquivo tiver ``` no início de alguma linha (um "
         "README com exemplos de código, por exemplo), abra e feche o bloco "
         "com quatro crases: ````markdown arquivo=README.md ... ````.",
+        "Para uma página, app ou jogo web, prefira UM arquivo .html com o "
+        "CSS e o JavaScript embutidos: ele abre direto no navegador com um "
+        "clique. Se precisar dividir (index.html, style.css, script.js), "
+        "entregue todos na mesma resposta e referencie-os pelo nome "
+        "simples (href=\"style.css\"): os arquivos de uma resposta ficam na "
+        "mesma pasta.",
         "Use um nome de arquivo simples, sem pastas (html_gen.py, não "
         "core/html_gen.py). Para alterar um arquivo anexado, use o mesmo "
         "nome dele.",
@@ -229,7 +239,9 @@ def save_generated_files(
     """
     if "```" not in text:
         return text
-    directory: List[Optional[str]] = []  # criada só se houver arquivo
+    # Pasta desta resposta, criada só se houver arquivo para gravar.
+    folder: List[Optional[str]] = []
+    used_names: set = set()
 
     def _replace(match: re.Match) -> str:
         lang, name = _split_info(match.group("info"))
@@ -247,16 +259,22 @@ def save_generated_files(
         if not content.endswith("\n"):
             content += "\n"
 
-        if not directory:
-            directory.append(files_dir(user_data_dir))
-        if directory[0] is None:
+        if not folder:
+            base = files_dir(user_data_dir)
+            folder.append(os.path.join(base, uuid.uuid4().hex[:12]) if base else None)
+        if folder[0] is None:
             return match.group(0)
-        # Uma pasta por arquivo: o nome fica limpo ("html_gen.py") e uma
-        # nova versão nunca sobrescreve a anterior.
-        folder = os.path.join(directory[0], uuid.uuid4().hex[:12])
-        path = os.path.join(folder, filename)
+        # Mesmo nome duas vezes na mesma resposta: a segunda vira nome-2.ext
+        # em vez de sobrescrever a primeira.
+        stem, ext = os.path.splitext(filename)
+        counter = 2
+        while filename.lower() in used_names:
+            filename = f"{stem}-{counter}{ext}"
+            counter += 1
+        used_names.add(filename.lower())
+        path = os.path.join(folder[0], filename)
         try:
-            os.makedirs(folder, exist_ok=True)
+            os.makedirs(folder[0], exist_ok=True)
             with open(path, "w", encoding="utf-8", newline="") as handle:
                 handle.write(content)
         except OSError as exc:
