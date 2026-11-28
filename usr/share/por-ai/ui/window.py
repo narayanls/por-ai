@@ -155,7 +155,7 @@ _CSS = b"""
 
 
 class PorAiWindow(Adw.ApplicationWindow):
-    MAX_ATTACHMENTS = 6
+    MAX_ATTACHMENTS = 8
 
     def __init__(self, application: Adw.Application, config: Config) -> None:
         super().__init__(application=application)
@@ -548,7 +548,7 @@ class PorAiWindow(Adw.ApplicationWindow):
         attach_button.set_icon_name("mail-attachment-symbolic")
         attach_button.set_tooltip_text(
             _("Anexar arquivos — até {max}").format(max=self.MAX_ATTACHMENTS)
-            + " (pdf, odt, ods, xlsx, txt, md, csv, json, py, toml, kdl, svg, "
+            + " (pdf, odt, ods, xlsx, txt, md, csv, json, py, toml, kdl, lua, sh, bash, fish, css, svg, "
             "png, jpg, webp)"
         )
         attach_button.add_css_class("flat")
@@ -616,8 +616,8 @@ class PorAiWindow(Adw.ApplicationWindow):
 
         input_scroller = Gtk.ScrolledWindow()
         input_scroller.set_policy(Gtk.PolicyType.NEVER, Gtk.PolicyType.AUTOMATIC)
-        input_scroller.set_min_content_height(44)
-        input_scroller.set_max_content_height(160)
+        input_scroller.set_min_content_height(74)
+        input_scroller.set_max_content_height(180)
         input_scroller.set_propagate_natural_height(True)
         input_scroller.set_hexpand(True)
         input_scroller.set_child(self._input_view)
@@ -2096,6 +2096,7 @@ class PorAiWindow(Adw.ApplicationWindow):
             "*.toml", "*.kdl", "*.svg",
             "*.pdf", "*.odt", "*.ods", "*.xlsx",
             "*.png", "*.jpg", "*.jpeg", "*.webp",
+            "*.lua", "*.css", "*.sh", "*.bash", "*.fish",
         ):
             doc_filter.add_pattern(pattern)
         filters.append(doc_filter)

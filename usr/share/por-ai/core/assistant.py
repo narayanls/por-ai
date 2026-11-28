@@ -105,6 +105,8 @@ _TEXT_EXTENSIONS = {
     ".tex", ".csv", ".log",
     ".json", ".py",
     ".toml", ".kdl",
+    ".lua", ".css",
+    ".sh", ".bash", ".fish",
 }
 _IMAGE_EXTENSIONS = {".jpg", ".jpeg", ".png", ".webp"}
 # Vetorial: vai como PNG rasterizado + código (ver read_svg_attachment).
