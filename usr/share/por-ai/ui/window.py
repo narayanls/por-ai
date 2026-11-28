@@ -47,6 +47,7 @@ except (ValueError, ImportError):
     _HAS_SPELLING = False
 
 from core.assistant import ChatAssistant
+from core import file_gen
 from core.config import REASONING_EFFORT_CHOICES, Config
 from core.maritaca import is_maritaca_model, to_api_id
 from core.storage import ConversationStore
@@ -1400,9 +1401,10 @@ class PorAiWindow(Adw.ApplicationWindow):
 
 
         
-        # As instruções de planilha/gráfico NÃO vão aqui: o ChatAssistant
-        # acrescenta capabilities_prompt() (core/sheet_gen.py) à mensagem de
-        # sistema em cada envio, já ajustado aos formatos instalados.
+        # As instruções de planilha/gráfico/apresentação NÃO vão aqui: o
+        # ChatAssistant acrescenta capabilities_prompt() (core/sheet_gen.py e
+        # core/slide_gen.py) à mensagem de sistema em cada envio, já
+        # ajustado aos formatos instalados.
         sys_prompt = self.config.system_prompt or ""
 
 
@@ -1515,7 +1517,9 @@ class PorAiWindow(Adw.ApplicationWindow):
             quoted = "\n".join(f"> {line}" if line else ">" for line in lines)
             parts.append(f"**💭 {self._reasoning_duration_label()}**\n{quoted}")
         if self._streaming_content:
-            parts.append(self._streaming_content)
+            # Blocos que vão virar arquivo aparecem como uma linha de
+            # progresso (ver file_gen.streaming_preview).
+            parts.append(file_gen.streaming_preview(self._streaming_content))
         if parts:
             self._streaming_row.set_text("\n\n".join(parts))
 
@@ -2094,7 +2098,7 @@ class PorAiWindow(Adw.ApplicationWindow):
             "*.txt", "*.md", "*.markdown", "*.rst", "*.org",
             "*.tex", "*.csv", "*.log", "*.json", "*.py",
             "*.toml", "*.kdl", "*.svg",
-            "*.pdf", "*.odt", "*.ods", "*.xlsx",
+            "*.pdf", "*.odt", "*.ods", "*.odp", "*.xlsx",
             "*.png", "*.jpg", "*.jpeg", "*.webp",
             "*.lua", "*.css", "*.sh", "*.bash", "*.fish",
         ):

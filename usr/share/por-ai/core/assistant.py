@@ -19,6 +19,11 @@ formatação. Em todos os casos o bloco é trocado por um link file://
 clicável. ODS é o formato pedido no system prompt; xlsx só quando o
 usuário pede Excel explicitamente.
 
+Arquivos completos (scripts, páginas, configs): blocos com o nome na
+cerca (```python arquivo=html_gen.py) são gravados com esse nome e
+trocados por um link; ver core/file_gen.py. Blocos sem nome continuam como
+código na bolha.
+
 Apresentações geradas pelo modelo: blocos ```odp (JSON com slides e tema,
 ver core/slide_gen.py) viram .odp, também trocados por um link. Não há
 backend pptx (seria uma dependência nova); um bloco ```pptx que escape é
@@ -102,6 +107,8 @@ from core.sheet_gen import (
 )
 # slide_gen também se autodetecta: sem odfpy, o prompt não oferece slides.
 from core import slide_gen
+# file_gen só usa a biblioteca padrão: arquivos completos estão sempre ativos.
+from core import file_gen
 from core.i18n import _
 
 
@@ -185,7 +192,11 @@ class ChatAssistant:
         esse texto interno.
         """
         addendum = "\n\n".join(
-            part for part in (capabilities_prompt(), slide_gen.capabilities_prompt())
+            part for part in (
+                capabilities_prompt(),
+                slide_gen.capabilities_prompt(),
+                file_gen.capabilities_prompt(),
+            )
             if part
         )
         if not addendum:
@@ -854,7 +865,8 @@ class ChatAssistant:
                     full += suffix
                     GLib.idle_add(on_delta, suffix)
 
-            # Blocos ```ods / ```xlsx / ```csv viram arquivos locais + link
+            # Blocos com arquivo=, ```ods / ```xlsx / ```csv e ```odp viram
+            # arquivos locais + link
             # clicável. Roda depois do streaming, então a bolha ainda mostra
             # o bloco cru — o `on_done` substitui o texto pela versão
             # processada.
@@ -863,9 +875,17 @@ class ChatAssistant:
             # janela reenviar a spec ao modelo num pedido de ajuste ("troca a
             # cor", "adiciona uma coluna"). Sem ele o histórico só teria o
             # link file://, e o modelo reinventaria a planilha do zero.
+            truncated = getattr(client, "last_finish_reason", None) == "length"
             display = full
             if full:
-                display = ChatAssistant._save_generated_spreadsheets(full)
+                # Arquivos primeiro: depois deles não sobra nenhuma cerca com
+                # "arquivo=" para os conversores seguintes interpretarem.
+                display = file_gen.save_generated_files(
+                    display, GLib.get_user_data_dir(),
+                    lambda path: GLib.filename_to_uri(path, None),
+                    truncated=truncated,
+                )
+                display = ChatAssistant._save_generated_spreadsheets(display)
                 display = ChatAssistant._save_generated_presentations(display)
                 display = ChatAssistant._save_untagged_specs(display)
 
@@ -873,11 +893,12 @@ class ChatAssistant:
             # apresentação longa chega com o JSON pela metade e fica crua na
             # bolha. Sem o aviso, parecia que o app tinha falhado na conversão.
             # Vai só no texto exibido; o histórico reenviado continua igual.
-            if getattr(client, "last_finish_reason", None) == "length" and not self._cancel.is_set():
+            if truncated and not self._cancel.is_set():
                 display = (display.rstrip() + "\n\n" if display.strip() else "") + "_⚠️ " + _(
                     "A resposta foi cortada pelo limite de tokens do modelo antes de "
-                    "terminar. Se era uma planilha ou apresentação, peça uma versão "
-                    "mais curta, aumente o limite em Preferências ou use outro modelo."
+                    "terminar. Se era um arquivo, planilha ou apresentação, peça uma "
+                    "versão mais curta, aumente o limite em Preferências ou use outro "
+                    "modelo."
                 ) + "_"
 
             if usage and on_usage is not None:
@@ -1425,8 +1446,11 @@ class ChatAssistant:
     # Qualquer bloco cercado, com a linguagem (pode ser vazia) no group(1).
     # Casa o bloco inteiro de uma vez, para a cerca de FECHAMENTO de um
     # bloco ```python nunca ser confundida com a abertura de outro.
+    # O `[^\n]*` engole o resto da linha de abertura (ex.: "arquivo=x.py"):
+    # sem ele, um bloco com algo além da linguagem não casava, e a cerca de
+    # fechamento dele passava a ser lida como abertura de outro bloco.
     _RE_ANY_FENCE = re.compile(
-        r"```[ \t]*([\w+-]*)[ \t]*\r?\n(.*?)(?:```|\Z)", re.DOTALL
+        r"```[ \t]*([\w+-]*)[^\n]*\r?\n(.*?)(?:```|\Z)", re.DOTALL
     )
     _UNTAGGED_JSON_LANGS = {"", "json", "jsonc", "json5"}
     # JSON solto, sem cerca: um objeto que começa no início de uma linha.

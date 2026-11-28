@@ -1382,16 +1382,16 @@ msgstr ""
 "prioridad del proveedor: esas funciones son de OpenRouter. El esfuerzo de "
 "razonamiento (botón 💭) funciona en S5."
 
-#: usr/share/por-ai/core/assistant.py:1400
+#: usr/share/por-ai/core/assistant.py:1421
 #, python-brace-format
 msgid "Baixar apresentação (.{ext})"
 msgstr "Descargar presentación (.{ext})"
 
-#: usr/share/por-ai/core/assistant.py:1042
+#: usr/share/por-ai/core/assistant.py:1063
 msgid "Instale python3-odfpy para anexar arquivos ODP."
 msgstr "Instala python3-odfpy para adjuntar archivos ODP."
 
-#: usr/share/por-ai/core/assistant.py:1044
+#: usr/share/por-ai/core/assistant.py:1065
 msgid ""
 "Arquivos .pptx não são suportados. Salve como .odp no LibreOffice Impress e "
 "anexe de novo."
@@ -1399,28 +1399,28 @@ msgstr ""
 "Los archivos .pptx no son compatibles. Guárdalo como .odp en LibreOffice "
 "Impress y adjúntalo de nuevo."
 
-#: usr/share/por-ai/core/assistant.py:1596
+#: usr/share/por-ai/core/assistant.py:1620
 msgid "Instale python3-odfpy para ler arquivos ODP."
 msgstr "Instala python3-odfpy para leer archivos ODP."
 
-#: usr/share/por-ai/core/assistant.py:1623
+#: usr/share/por-ai/core/assistant.py:1647
 #, python-brace-format
 msgid "Erro ao ler ODP: {error}"
 msgstr "Error al leer el ODP: {error}"
 
-#: usr/share/por-ai/core/assistant.py:1625
+#: usr/share/por-ai/core/assistant.py:1649
 msgid "A apresentação está vazia."
 msgstr "La presentación está vacía."
 
-#: usr/share/por-ai/core/assistant.py:877
+#: usr/share/por-ai/core/assistant.py:897
 msgid ""
 "A resposta foi cortada pelo limite de tokens do modelo antes de terminar. Se "
-"era uma planilha ou apresentação, peça uma versão mais curta, aumente o "
-"limite em Preferências ou use outro modelo."
+"era um arquivo, planilha ou apresentação, peça uma versão mais curta, aumente "
+"o limite em Preferências ou use outro modelo."
 msgstr ""
 "La respuesta se cortó por el límite de tokens del modelo antes de terminar. "
-"Si era una hoja de cálculo o una presentación, pide una versión más corta, "
-"aumenta el límite en Preferencias o usa otro modelo."
+"Si era un archivo, una hoja de cálculo o una presentación, pide una versión "
+"más corta, aumenta el límite en Preferencias o usa otro modelo."
 
 #: usr/share/por-ai/core/slide_gen.py:336
 msgid "Apresentação"
@@ -1437,3 +1437,51 @@ msgstr "Sí"
 #: usr/share/por-ai/core/slide_gen.py:771
 msgid "Não"
 msgstr "No"
+
+#: usr/share/por-ai/core/file_gen.py:273
+#, python-brace-format
+msgid ""
+"A linha {line} de {name} parece um trecho omitido pelo modelo (\"...\", "
+"\"resto do código\"). Confira antes de usar ou peça o arquivo completo de "
+"novo."
+msgstr ""
+"La línea {line} de {name} parece un fragmento omitido por el modelo (\"...\", "
+"\"resto del código\"). Revísalo antes de usarlo o pide el archivo completo de "
+"nuevo."
+
+#: usr/share/por-ai/core/file_gen.py:306
+#, python-brace-format
+msgid "gerando {name}…"
+msgstr "generando {name}…"
+
+#: usr/share/por-ai/core/file_gen.py:306
+#, python-brace-format
+msgid "salvando {name}…"
+msgstr "guardando {name}…"
+
+#: usr/share/por-ai/core/file_gen.py:311
+msgid "apresentação"
+msgstr "presentación"
+
+#: usr/share/por-ai/core/file_gen.py:311
+msgid "planilha"
+msgstr "hoja de cálculo"
+
+#: usr/share/por-ai/core/file_gen.py:312
+#, python-brace-format
+msgid "gerando {kind}…"
+msgstr "generando {kind}…"
+
+#: usr/share/por-ai/core/file_gen.py:267
+#, python-brace-format
+msgid "Baixar {name} ({lines} linha)"
+msgid_plural "Baixar {name} ({lines} linhas)"
+msgstr[0] "Descargar {name} ({lines} línea)"
+msgstr[1] "Descargar {name} ({lines} líneas)"
+
+#: usr/share/por-ai/core/file_gen.py:308
+#, python-brace-format
+msgid "({lines} linha)"
+msgid_plural "({lines} linhas)"
+msgstr[0] "({lines} línea)"
+msgstr[1] "({lines} líneas)"
