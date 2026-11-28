@@ -88,6 +88,11 @@ class OpenRouterClient:
         # pesquisa na web estava ligada. Lista de {"url", "title"} sem
         # repetições, na ordem em que apareceram. Zerada a cada chamada.
         self.last_citations: List[Dict[str, str]] = []
+        # finish_reason da última resposta ("stop", "length"...). "length"
+        # quer dizer que a resposta foi cortada pelo limite de tokens: o
+        # ChatAssistant usa isso para avisar o usuário em vez de entregar
+        # uma planilha/apresentação pela metade sem explicação.
+        self.last_finish_reason: Optional[str] = None
 
     # ------------------------------------------------------------------ #
     # Cabeçalhos                                                           #
@@ -195,6 +200,7 @@ class OpenRouterClient:
         payload.update(self._extra_payload())
         payload.update(self._clean_params(params))
         self.last_citations = []
+        self.last_finish_reason = None
 
         started = time.monotonic()
         try:
@@ -237,6 +243,7 @@ class OpenRouterClient:
         if isinstance(message, dict):
             self._collect_citations(message.get("annotations"), self.last_citations)
         finish_reason = choices[0].get("finish_reason") if isinstance(choices[0], dict) else None
+        self.last_finish_reason = finish_reason
         usage = data.get("usage") if isinstance(data.get("usage"), dict) else None
         self._debug_log(
             model,
@@ -305,6 +312,7 @@ class OpenRouterClient:
         payload.update(self._extra_payload())
         payload.update(self._clean_params(params))
         self.last_citations = []
+        self.last_finish_reason = None
 
         collected: List[str] = []
         collected_reasoning: List[str] = []
@@ -405,6 +413,7 @@ class OpenRouterClient:
             raise OpenRouterError(_("Falha ao contatar {provider}: {error}").format(provider=self.PROVIDER_NAME, error=exc)) from exc
 
         timing["total"] = time.monotonic() - started
+        self.last_finish_reason = finish_reason
         self._debug_log(model, finish_reason, usage, timing=timing, provider=provider)
 
         final_text = "".join(collected)

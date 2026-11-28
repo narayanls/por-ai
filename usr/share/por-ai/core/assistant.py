@@ -867,6 +867,18 @@ class ChatAssistant:
             if full:
                 display = ChatAssistant._save_generated_spreadsheets(full)
                 display = ChatAssistant._save_generated_presentations(display)
+                display = ChatAssistant._save_untagged_specs(display)
+
+            # Resposta cortada pelo limite de tokens: uma planilha ou
+            # apresentação longa chega com o JSON pela metade e fica crua na
+            # bolha. Sem o aviso, parecia que o app tinha falhado na conversão.
+            # Vai só no texto exibido; o histórico reenviado continua igual.
+            if getattr(client, "last_finish_reason", None) == "length" and not self._cancel.is_set():
+                display = (display.rstrip() + "\n\n" if display.strip() else "") + "_⚠️ " + _(
+                    "A resposta foi cortada pelo limite de tokens do modelo antes de "
+                    "terminar. Se era uma planilha ou apresentação, peça uma versão "
+                    "mais curta, aumente o limite em Preferências ou use outro modelo."
+                ) + "_"
 
             if usage and on_usage is not None:
                 GLib.idle_add(on_usage, usage)
@@ -1296,37 +1308,15 @@ class ChatAssistant:
             return text
 
         def _save_sheet(match: re.Match) -> str:
-            formats = available_formats()
-            if not formats:
-                return match.group(0)
-
-            fmt = match.group(1).lower()
             raw = match.group(2).strip()
             if not raw:
                 return match.group(0)
-            try:
-                spec = json.loads(raw)
-            except json.JSONDecodeError as exc:
-                logger.info("Bloco de planilha com JSON inválido: %s", exc)
-                return match.group(0)
+            spec = ChatAssistant._load_json_lenient(raw)
             if not isinstance(spec, dict):
+                logger.info("Bloco de planilha com JSON inválido")
                 return match.group(0)
-
-            # Se o backend do formato pedido não existe, entrega no outro em
-            # vez de devolver JSON cru: planilha no formato "errado" ainda é
-            # uma planilha, e o usuário converte em dois cliques.
-            if fmt not in formats:
-                logger.info("Backend %s ausente, gerando em %s", fmt, formats[0])
-                fmt = formats[0]
-
-            path = os.path.join(directory, f"{uuid.uuid4().hex}.{fmt}")
-            try:
-                build_sheet(spec, path, fmt)
-            except (SheetSpecError, OSError, ValueError) as exc:
-                logger.info("Falha ao gerar planilha: %s", exc)
-                return match.group(0)
-            uri = GLib.filename_to_uri(path, None)
-            return "[" + _("Baixar planilha (.{ext})").format(ext=fmt) + f"]({uri})"
+            link = ChatAssistant._sheet_link(spec, match.group(1).lower())
+            return link or match.group(0)
 
         def _save_csv(match: re.Match) -> str:
             content = match.group(1).strip()
@@ -1346,6 +1336,33 @@ class ChatAssistant:
         return ChatAssistant._RE_CSV_BLOCK.sub(_save_csv, text)
 
     @staticmethod
+    def _sheet_link(spec: Dict[str, Any], fmt: str = "") -> Optional[str]:
+        """Gera a planilha descrita por ``spec`` e devolve o link Markdown,
+        ou None se não for possível (o chamador mantém o bloco original).
+        ``fmt`` vazio = formato preferido (ods)."""
+        formats = available_formats()
+        if not formats:
+            return None
+        directory = ChatAssistant._spreadsheets_dir()
+        if directory is None:
+            return None
+        # Se o backend do formato pedido não existe, entrega no outro em
+        # vez de devolver JSON cru: planilha no formato "errado" ainda é
+        # uma planilha, e o usuário converte em dois cliques.
+        if fmt not in formats:
+            if fmt:
+                logger.info("Backend %s ausente, gerando em %s", fmt, formats[0])
+            fmt = formats[0]
+        path = os.path.join(directory, f"{uuid.uuid4().hex}.{fmt}")
+        try:
+            build_sheet(spec, path, fmt)
+        except (SheetSpecError, OSError, ValueError) as exc:
+            logger.info("Falha ao gerar planilha: %s", exc)
+            return None
+        uri = GLib.filename_to_uri(path, None)
+        return "[" + _("Baixar planilha (.{ext})").format(ext=fmt) + f"]({uri})"
+
+    @staticmethod
     def _presentations_dir() -> Optional[str]:
         """Como _spreadsheets_dir, para as apresentações geradas."""
         path = os.path.join(GLib.get_user_data_dir(), "por-ai", "presentations")
@@ -1357,45 +1374,154 @@ class ChatAssistant:
         return path
 
     @staticmethod
-    def _save_generated_presentations(text: str) -> str:
-        """Converte blocos ```odp da resposta em arquivos .odp locais.
-
-        Mesmas regras de _save_generated_spreadsheets: se o bloco não puder
-        ser convertido (JSON malformado, spec sem slides, odfpy ausente,
-        erro de escrita), ele fica intacto na resposta.
+    def _presentation_link(spec: Any) -> Optional[str]:
+        """Gera a apresentação descrita por ``spec`` e devolve o link
+        Markdown, ou None se não for possível.
 
         O nome do arquivo vem do título da apresentação ("Resultados Q3" →
         resultados-q3-1a2b3c4d.odp): é o nome que a pessoa vê ao anexar o
         arquivo num e-mail. O sufixo aleatório evita sobrescrever uma
         versão anterior quando ela pede ajustes.
         """
-        if not slide_gen.available() or not ChatAssistant._RE_SLIDES_BLOCK.search(text):
-            return text
+        if not slide_gen.available():
+            return None
         directory = ChatAssistant._presentations_dir()
         if directory is None:
+            return None
+        try:
+            title, _theme, _slides = slide_gen.parse_spec(spec)
+            name = f"{slide_gen.filename_slug(title)}-{uuid.uuid4().hex[:8]}.odp"
+            path = os.path.join(directory, name)
+            slide_gen.build_presentation(spec, path)
+        except (slide_gen.SlideSpecError, OSError, ValueError) as exc:
+            logger.info("Falha ao gerar apresentação: %s", exc)
+            return None
+        uri = GLib.filename_to_uri(path, None)
+        return "[" + _("Baixar apresentação (.{ext})").format(ext="odp") + f"]({uri})"
+
+    @staticmethod
+    def _save_generated_presentations(text: str) -> str:
+        """Converte blocos ```odp da resposta em arquivos .odp locais.
+
+        Mesmas regras de _save_generated_spreadsheets: se o bloco não puder
+        ser convertido (JSON malformado, spec sem slides, odfpy ausente,
+        erro de escrita), ele fica intacto na resposta.
+        """
+        if not slide_gen.available():
             return text
 
         def _save(match: re.Match) -> str:
             raw = match.group(1).strip()
             if not raw:
                 return match.group(0)
-            try:
-                spec = json.loads(raw)
-            except json.JSONDecodeError as exc:
-                logger.info("Bloco de apresentação com JSON inválido: %s", exc)
+            spec = ChatAssistant._load_json_lenient(raw)
+            if spec is None:
+                logger.info("Bloco de apresentação com JSON inválido")
                 return match.group(0)
-            try:
-                title, _theme, _slides = slide_gen.parse_spec(spec)
-                name = f"{slide_gen.filename_slug(title)}-{uuid.uuid4().hex[:8]}.odp"
-                path = os.path.join(directory, name)
-                slide_gen.build_presentation(spec, path)
-            except (slide_gen.SlideSpecError, OSError, ValueError) as exc:
-                logger.info("Falha ao gerar apresentação: %s", exc)
-                return match.group(0)
-            uri = GLib.filename_to_uri(path, None)
-            return "[" + _("Baixar apresentação (.{ext})").format(ext="odp") + f"]({uri})"
+            return ChatAssistant._presentation_link(spec) or match.group(0)
 
         return ChatAssistant._RE_SLIDES_BLOCK.sub(_save, text)
+
+    # Qualquer bloco cercado, com a linguagem (pode ser vazia) no group(1).
+    # Casa o bloco inteiro de uma vez, para a cerca de FECHAMENTO de um
+    # bloco ```python nunca ser confundida com a abertura de outro.
+    _RE_ANY_FENCE = re.compile(
+        r"```[ \t]*([\w+-]*)[ \t]*\r?\n(.*?)(?:```|\Z)", re.DOTALL
+    )
+    _UNTAGGED_JSON_LANGS = {"", "json", "jsonc", "json5"}
+    # JSON solto, sem cerca: um objeto que começa no início de uma linha.
+    _RE_BARE_JSON_START = re.compile(r"(?m)^[ \t]*\{")
+
+    @staticmethod
+    def _classify_spec(spec: Any) -> Optional[str]:
+        """'slides' ou 'sheet' quando o JSON tem claramente o formato de uma
+        das specs; None para qualquer outro JSON (que fica como código)."""
+        if not isinstance(spec, dict):
+            return None
+        slides = spec.get("slides")
+        if isinstance(slides, list) and any(isinstance(item, dict) for item in slides):
+            return "slides"
+        columns = spec.get("columns")
+        if isinstance(columns, list) and columns and isinstance(spec.get("rows"), list):
+            return "sheet"
+        return None
+
+    @staticmethod
+    def _spec_link(spec: Any) -> Optional[str]:
+        kind = ChatAssistant._classify_spec(spec)
+        if kind == "slides":
+            return ChatAssistant._presentation_link(spec)
+        if kind == "sheet":
+            return ChatAssistant._sheet_link(spec)
+        return None
+
+    @staticmethod
+    def _save_untagged_specs(text: str) -> str:
+        """Rede de segurança para modelos que não seguem a cerca pedida.
+
+        Os modelos da Maritaca, por exemplo, tendem a cercar o JSON com
+        ```json (ou sem linguagem) em vez de ```odp / ```ods, e às vezes
+        mandam o JSON sem cerca nenhuma. Aqui esses blocos são convertidos
+        SÓ quando o conteúdo tem o formato exato de uma spec (``slides``
+        com objetos, ou ``columns`` + ``rows``); qualquer outro JSON —
+        um exemplo de API, um config — continua como código.
+
+        Roda depois dos conversores específicos, então só vê o que eles
+        deixaram passar.
+        """
+        def _fenced(match: re.Match) -> str:
+            if match.group(1).lower() not in ChatAssistant._UNTAGGED_JSON_LANGS:
+                return match.group(0)
+            raw = match.group(2).strip()
+            if not raw.startswith("{"):
+                return match.group(0)
+            spec = ChatAssistant._load_json_lenient(raw)
+            return ChatAssistant._spec_link(spec) or match.group(0)
+
+        if "```" in text:
+            return ChatAssistant._RE_ANY_FENCE.sub(_fenced, text)
+
+        # Sem nenhuma cerca: procura um objeto JSON solto no texto.
+        for start in ChatAssistant._RE_BARE_JSON_START.finditer(text):
+            begin = text.index("{", start.start())
+            parsed = ChatAssistant._load_json_lenient(text[begin:], with_end=True)
+            if parsed is None:
+                continue
+            spec, length = parsed
+            link = ChatAssistant._spec_link(spec)
+            if link:
+                return text[:begin] + link + text[begin + length:]
+        return text
+
+    _RE_TRAILING_COMMA = re.compile(r",(\s*[\]}])")
+
+    @staticmethod
+    def _load_json_lenient(raw: str, with_end: bool = False) -> Any:
+        """``json.loads`` tolerante aos deslizes mais comuns de LLM:
+
+        * quebra de linha ou tab literal dentro de string (``strict=False``);
+        * texto depois do objeto (comentário, frase) — ignorado;
+        * vírgula sobrando antes de ``]`` ou ``}``.
+
+        Devolve None se nada disso bastar. Com ``with_end=True`` devolve
+        ``(objeto, tamanho_consumido)`` — só na tentativa sem correções,
+        porque a correção de vírgulas muda as posições do texto.
+        """
+        decoder = json.JSONDecoder(strict=False)
+        text = raw.lstrip("\ufeff").strip()
+        offset = len(raw) - len(raw.lstrip("\ufeff").lstrip())
+        candidates = [text]
+        if not with_end:
+            fixed = ChatAssistant._RE_TRAILING_COMMA.sub(r"\1", text)
+            if fixed != text:
+                candidates.append(fixed)
+        for candidate in candidates:
+            try:
+                obj, end = decoder.raw_decode(candidate)
+            except ValueError:
+                continue
+            return (obj, offset + end) if with_end else obj
+        return None
 
     # ------------------------------------------------------------------ #
     # Leitores específicos                                                 #

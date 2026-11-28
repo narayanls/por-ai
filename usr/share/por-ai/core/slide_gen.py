@@ -137,8 +137,9 @@ def capabilities_prompt() -> str:
 
     lines = [
         "Ao gerar uma apresentação de slides para o usuário, produza um "
-        "bloco de código cercado com ```odp; dentro da cerca vai APENAS um "
-        "JSON válido, sem comentários. O formato é sempre .odp, mesmo que o "
+        "bloco de código cercado com ```odp (escreva exatamente odp após as "
+        "crases, não json); dentro da cerca vai APENAS um JSON válido, sem "
+        "comentários. O formato é sempre .odp, mesmo que o "
         "usuário peça PowerPoint/pptx: nesse caso diga a ele que o "
         "PowerPoint abre .odp e que o LibreOffice Impress salva em .pptx.",
         "Formato:",
