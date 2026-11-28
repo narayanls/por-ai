@@ -1364,16 +1364,16 @@ msgstr ""
 "Maritaca models have no web search, privacy filter or provider priority: "
 "those features belong to OpenRouter. Reasoning effort (💭 button) works on S5."
 
-#: usr/share/por-ai/core/assistant.py:1400
+#: usr/share/por-ai/core/assistant.py:1421
 #, python-brace-format
 msgid "Baixar apresentação (.{ext})"
 msgstr "Download presentation (.{ext})"
 
-#: usr/share/por-ai/core/assistant.py:1042
+#: usr/share/por-ai/core/assistant.py:1063
 msgid "Instale python3-odfpy para anexar arquivos ODP."
 msgstr "Install python3-odfpy to attach ODP files."
 
-#: usr/share/por-ai/core/assistant.py:1044
+#: usr/share/por-ai/core/assistant.py:1065
 msgid ""
 "Arquivos .pptx não são suportados. Salve como .odp no LibreOffice Impress e "
 "anexe de novo."
@@ -1381,28 +1381,28 @@ msgstr ""
 ".pptx files are not supported. Save as .odp in LibreOffice Impress and attach "
 "it again."
 
-#: usr/share/por-ai/core/assistant.py:1596
+#: usr/share/por-ai/core/assistant.py:1620
 msgid "Instale python3-odfpy para ler arquivos ODP."
 msgstr "Install python3-odfpy to read ODP files."
 
-#: usr/share/por-ai/core/assistant.py:1623
+#: usr/share/por-ai/core/assistant.py:1647
 #, python-brace-format
 msgid "Erro ao ler ODP: {error}"
 msgstr "Error reading ODP: {error}"
 
-#: usr/share/por-ai/core/assistant.py:1625
+#: usr/share/por-ai/core/assistant.py:1649
 msgid "A apresentação está vazia."
 msgstr "The presentation is empty."
 
-#: usr/share/por-ai/core/assistant.py:877
+#: usr/share/por-ai/core/assistant.py:897
 msgid ""
 "A resposta foi cortada pelo limite de tokens do modelo antes de terminar. Se "
-"era uma planilha ou apresentação, peça uma versão mais curta, aumente o "
-"limite em Preferências ou use outro modelo."
+"era um arquivo, planilha ou apresentação, peça uma versão mais curta, aumente "
+"o limite em Preferências ou use outro modelo."
 msgstr ""
 "The response was cut off by the model's token limit before it finished. If it "
-"was a spreadsheet or presentation, ask for a shorter version, raise the limit "
-"in Preferences or use another model."
+"was a file, spreadsheet or presentation, ask for a shorter version, raise the "
+"limit in Preferences or use another model."
 
 #: usr/share/por-ai/core/slide_gen.py:336
 msgid "Apresentação"
@@ -1419,3 +1419,51 @@ msgstr "Yes"
 #: usr/share/por-ai/core/slide_gen.py:771
 msgid "Não"
 msgstr "No"
+
+#: usr/share/por-ai/core/file_gen.py:273
+#, python-brace-format
+msgid ""
+"A linha {line} de {name} parece um trecho omitido pelo modelo (\"...\", "
+"\"resto do código\"). Confira antes de usar ou peça o arquivo completo de "
+"novo."
+msgstr ""
+"Line {line} of {name} looks like a section the model left out (\"...\", "
+"\"rest of the code\"). Check it before using it or ask for the complete file "
+"again."
+
+#: usr/share/por-ai/core/file_gen.py:306
+#, python-brace-format
+msgid "gerando {name}…"
+msgstr "generating {name}…"
+
+#: usr/share/por-ai/core/file_gen.py:306
+#, python-brace-format
+msgid "salvando {name}…"
+msgstr "saving {name}…"
+
+#: usr/share/por-ai/core/file_gen.py:311
+msgid "apresentação"
+msgstr "presentation"
+
+#: usr/share/por-ai/core/file_gen.py:311
+msgid "planilha"
+msgstr "spreadsheet"
+
+#: usr/share/por-ai/core/file_gen.py:312
+#, python-brace-format
+msgid "gerando {kind}…"
+msgstr "generating {kind}…"
+
+#: usr/share/por-ai/core/file_gen.py:267
+#, python-brace-format
+msgid "Baixar {name} ({lines} linha)"
+msgid_plural "Baixar {name} ({lines} linhas)"
+msgstr[0] "Download {name} ({lines} line)"
+msgstr[1] "Download {name} ({lines} lines)"
+
+#: usr/share/por-ai/core/file_gen.py:308
+#, python-brace-format
+msgid "({lines} linha)"
+msgid_plural "({lines} linhas)"
+msgstr[0] "({lines} line)"
+msgstr[1] "({lines} lines)"

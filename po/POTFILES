@@ -1,5 +1,6 @@
 usr/share/por-ai/core/assistant.py
 usr/share/por-ai/core/config.py
+usr/share/por-ai/core/file_gen.py
 usr/share/por-ai/core/maritaca.py
 usr/share/por-ai/core/openrouter.py
 usr/share/por-ai/core/sheet_gen.py
