@@ -1381,3 +1381,49 @@ msgstr ""
 "En los modelos de Maritaca no hay búsqueda web, filtro de privacidad ni "
 "prioridad del proveedor: esas funciones son de OpenRouter. El esfuerzo de "
 "razonamiento (botón 💭) funciona en S5."
+
+#: usr/share/por-ai/core/assistant.py:1396
+#, python-brace-format
+msgid "Baixar apresentação (.{ext})"
+msgstr "Descargar presentación (.{ext})"
+
+#: usr/share/por-ai/core/assistant.py:1030
+msgid "Instale python3-odfpy para anexar arquivos ODP."
+msgstr "Instala python3-odfpy para adjuntar archivos ODP."
+
+#: usr/share/por-ai/core/assistant.py:1032
+msgid ""
+"Arquivos .pptx não são suportados. Salve como .odp no LibreOffice Impress e "
+"anexe de novo."
+msgstr ""
+"Los archivos .pptx no son compatibles. Guárdalo como .odp en LibreOffice "
+"Impress y adjúntalo de nuevo."
+
+#: usr/share/por-ai/core/assistant.py:1470
+msgid "Instale python3-odfpy para ler arquivos ODP."
+msgstr "Instala python3-odfpy para leer archivos ODP."
+
+#: usr/share/por-ai/core/assistant.py:1497
+#, python-brace-format
+msgid "Erro ao ler ODP: {error}"
+msgstr "Error al leer el ODP: {error}"
+
+#: usr/share/por-ai/core/assistant.py:1499
+msgid "A apresentação está vazia."
+msgstr "La presentación está vacía."
+
+#: usr/share/por-ai/core/slide_gen.py:335
+msgid "Apresentação"
+msgstr "Presentación"
+
+#: usr/share/por-ai/core/slide_gen.py:677
+msgid "(cont.)"
+msgstr "(cont.)"
+
+#: usr/share/por-ai/core/slide_gen.py:770
+msgid "Sim"
+msgstr "Sí"
+
+#: usr/share/por-ai/core/slide_gen.py:770
+msgid "Não"
+msgstr "No"

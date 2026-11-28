@@ -11,6 +11,6 @@
 requests==2.34.2      # core/openrouter.py, core/updater.py
 pypdf==6.19.0         # anexos PDF
 openpyxl==3.1.5       # planilhas .xlsx
-odfpy==1.4.1          # planilhas .ods e anexos .odt (defusedxml: ver EXTRA_DEPS no gerar_yaml.py)
-matplotlib==3.11.2    # gráficos embutidos nas planilhas (traz numpy)
+odfpy==1.4.1          # planilhas .ods, apresentações .odp e anexos .odt/.ods/.odp (defusedxml: ver EXTRA_DEPS no gerar_yaml.py)
+matplotlib==3.11.2    # gráficos embutidos nas planilhas e nos slides (traz numpy)
 pillow==12.3.0        # openpyxl.drawing.image precisa do PIL para embutir o gráfico

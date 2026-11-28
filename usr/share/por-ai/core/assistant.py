@@ -3,7 +3,7 @@ Coordenador de chat do POR.ai.
 
 Formatos de texto suportados (enviados como bloco na mensagem):
   txt, md, rst, org, tex, csv, log, json, py, toml, kdl, svg,
-  pdf, odt, ods, xlsx
+  pdf, odt, ods, odp, xlsx
 
 SVG vai de duas formas: rasterizado para PNG (os provedores do OpenRouter
 só aceitam imagens rasterizadas em image_url, então é assim que o modelo
@@ -18,6 +18,11 @@ estilo) viram planilhas formatadas; blocos ```csv viram .csv sem
 formatação. Em todos os casos o bloco é trocado por um link file://
 clicável. ODS é o formato pedido no system prompt; xlsx só quando o
 usuário pede Excel explicitamente.
+
+Apresentações geradas pelo modelo: blocos ```odp (JSON com slides e tema,
+ver core/slide_gen.py) viram .odp, também trocados por um link. Não há
+backend pptx (seria uma dependência nova); um bloco ```pptx que escape é
+gerado como .odp, que o PowerPoint abre.
 """
 
 from __future__ import annotations
@@ -95,6 +100,8 @@ from core.sheet_gen import (
     build_sheet,
     capabilities_prompt,
 )
+# slide_gen também se autodetecta: sem odfpy, o prompt não oferece slides.
+from core import slide_gen
 from core.i18n import _
 
 
@@ -165,8 +172,9 @@ class ChatAssistant:
 
     @staticmethod
     def _inject_capabilities(messages: List[Any]) -> List[Any]:
-        """Acrescenta as instruções de formato de planilha/gráfico (ver
-        sheet_gen.capabilities_prompt()) à mensagem de sistema, sem tocar
+        """Acrescenta as instruções de formato de planilha/gráfico e de
+        apresentação (ver sheet_gen.capabilities_prompt() e
+        slide_gen.capabilities_prompt()) à mensagem de sistema, sem tocar
         no ``system_prompt`` que o usuário edita em Preferências.
 
         Gerado a cada envio (não uma vez só) porque reflete os backends
@@ -176,7 +184,10 @@ class ChatAssistant:
         reenviar o histórico após editar uma mensagem) e não deve carregar
         esse texto interno.
         """
-        addendum = capabilities_prompt()
+        addendum = "\n\n".join(
+            part for part in (capabilities_prompt(), slide_gen.capabilities_prompt())
+            if part
+        )
         if not addendum:
             return messages
 
@@ -855,6 +866,7 @@ class ChatAssistant:
             display = full
             if full:
                 display = ChatAssistant._save_generated_spreadsheets(full)
+                display = ChatAssistant._save_generated_presentations(display)
 
             if usage and on_usage is not None:
                 GLib.idle_add(on_usage, usage)
@@ -999,6 +1011,8 @@ class ChatAssistant:
             return ODT_AVAILABLE
         if ext == ".ods":
             return ODT_AVAILABLE
+        if ext == ".odp":
+            return ODT_AVAILABLE
         if ext == ".xlsx":
             return XLSX_AVAILABLE
         return False
@@ -1012,6 +1026,11 @@ class ChatAssistant:
             return _("Instale python3-odfpy para anexar arquivos ODT.")
         if ext == ".ods" and not ODT_AVAILABLE:
             return _("Instale python3-odfpy para anexar arquivos ODS.")
+        if ext == ".odp" and not ODT_AVAILABLE:
+            return _("Instale python3-odfpy para anexar arquivos ODP.")
+        if ext == ".pptx":
+            return _("Arquivos .pptx não são suportados. Salve como .odp no "
+                     "LibreOffice Impress e anexe de novo.")
         if ext == ".xlsx" and not XLSX_AVAILABLE:
             return _("Instale python3-openpyxl para anexar arquivos XLSX.")
         if ext == ".docx":
@@ -1020,7 +1039,7 @@ class ChatAssistant:
 
     @staticmethod
     def read_text_attachment(path: str) -> str:
-        """Extrai texto de documentos (PDF, ODT, ODS, XLSX, texto puro)."""
+        """Extrai texto de documentos (PDF, ODT, ODS, ODP, XLSX, texto puro)."""
         ext = os.path.splitext(path)[1].lower()
         if ext == ".pdf":
             return ChatAssistant._read_pdf(path)
@@ -1028,6 +1047,8 @@ class ChatAssistant:
             return ChatAssistant._read_odt(path)
         if ext == ".ods":
             return ChatAssistant._read_ods(path)
+        if ext == ".odp":
+            return ChatAssistant._read_odp(path)
         if ext == ".xlsx":
             return ChatAssistant._read_xlsx(path)
         try:
@@ -1192,6 +1213,11 @@ class ChatAssistant:
     _RE_CSV_BLOCK = re.compile(
         r"```[ \t]*csv[ \t]*\r?\n(.*?)(?:```|\Z)", re.DOTALL | re.IGNORECASE
     )
+    # Apresentações: mesma tolerância das planilhas. ```pptx é aceito só
+    # como rede de segurança (o prompt pede odp) e também vira .odp.
+    _RE_SLIDES_BLOCK = re.compile(
+        r"```[ \t]*(?:odp|pptx)[ \t]*\r?\n(.*?)(?:```|\Z)", re.DOTALL | re.IGNORECASE
+    )
 
     @staticmethod
     def _save_generated_images(image_urls: List[str]) -> str:
@@ -1319,6 +1345,58 @@ class ChatAssistant:
         text = ChatAssistant._RE_SHEET_BLOCK.sub(_save_sheet, text)
         return ChatAssistant._RE_CSV_BLOCK.sub(_save_csv, text)
 
+    @staticmethod
+    def _presentations_dir() -> Optional[str]:
+        """Como _spreadsheets_dir, para as apresentações geradas."""
+        path = os.path.join(GLib.get_user_data_dir(), "por-ai", "presentations")
+        try:
+            os.makedirs(path, exist_ok=True)
+        except OSError as exc:
+            logger.warning("Não foi possível criar %s: %s", path, exc)
+            return None
+        return path
+
+    @staticmethod
+    def _save_generated_presentations(text: str) -> str:
+        """Converte blocos ```odp da resposta em arquivos .odp locais.
+
+        Mesmas regras de _save_generated_spreadsheets: se o bloco não puder
+        ser convertido (JSON malformado, spec sem slides, odfpy ausente,
+        erro de escrita), ele fica intacto na resposta.
+
+        O nome do arquivo vem do título da apresentação ("Resultados Q3" →
+        resultados-q3-1a2b3c4d.odp): é o nome que a pessoa vê ao anexar o
+        arquivo num e-mail. O sufixo aleatório evita sobrescrever uma
+        versão anterior quando ela pede ajustes.
+        """
+        if not slide_gen.available() or not ChatAssistant._RE_SLIDES_BLOCK.search(text):
+            return text
+        directory = ChatAssistant._presentations_dir()
+        if directory is None:
+            return text
+
+        def _save(match: re.Match) -> str:
+            raw = match.group(1).strip()
+            if not raw:
+                return match.group(0)
+            try:
+                spec = json.loads(raw)
+            except json.JSONDecodeError as exc:
+                logger.info("Bloco de apresentação com JSON inválido: %s", exc)
+                return match.group(0)
+            try:
+                title, _theme, _slides = slide_gen.parse_spec(spec)
+                name = f"{slide_gen.filename_slug(title)}-{uuid.uuid4().hex[:8]}.odp"
+                path = os.path.join(directory, name)
+                slide_gen.build_presentation(spec, path)
+            except (slide_gen.SlideSpecError, OSError, ValueError) as exc:
+                logger.info("Falha ao gerar apresentação: %s", exc)
+                return match.group(0)
+            uri = GLib.filename_to_uri(path, None)
+            return "[" + _("Baixar apresentação (.{ext})").format(ext="odp") + f"]({uri})"
+
+        return ChatAssistant._RE_SLIDES_BLOCK.sub(_save, text)
+
     # ------------------------------------------------------------------ #
     # Leitores específicos                                                 #
     # ------------------------------------------------------------------ #
@@ -1381,6 +1459,45 @@ class ChatAssistant:
             return "\n".join(lines)
         except Exception as exc:
             raise RuntimeError(_("Erro ao ler ODS: {error}").format(error=exc)) from exc
+
+    @staticmethod
+    def _read_odp(path: str) -> str:
+        """Lê uma apresentação .odp como texto, slide por slide, com as
+        notas do apresentador separadas. É o que permite anexar uma
+        apresentação e pedir "melhora esses slides": o modelo lê o texto e
+        devolve um bloco ```odp novo."""
+        if not ODT_AVAILABLE:
+            raise RuntimeError(_("Instale python3-odfpy para ler arquivos ODP."))
+        try:
+            from odf import teletype
+            from odf.draw import Page
+            from odf.presentation import Notes
+            doc = odf_load(path)
+            blocks = []
+            for number, page in enumerate(doc.getElementsByType(Page), start=1):
+                note_paragraphs = set()
+                notes = []
+                for note in page.getElementsByType(Notes):
+                    for para in note.getElementsByType(P):
+                        note_paragraphs.add(id(para))
+                        line = teletype.extractText(para).strip()
+                        if line:
+                            notes.append(line)
+                lines = [
+                    teletype.extractText(para).strip()
+                    for para in page.getElementsByType(P)
+                    if id(para) not in note_paragraphs
+                ]
+                lines = [line for line in lines if line]
+                block = f"# Slide {number}\n" + "\n".join(lines)
+                if notes:
+                    block += "\n[Notas] " + " ".join(notes)
+                blocks.append(block)
+        except Exception as exc:
+            raise RuntimeError(_("Erro ao ler ODP: {error}").format(error=exc)) from exc
+        if not blocks:
+            raise RuntimeError(_("A apresentação está vazia."))
+        return "\n\n".join(blocks)
 
     @staticmethod
     def _read_xlsx(path: str) -> str:
