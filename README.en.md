@@ -63,11 +63,12 @@ Steps 2 and 3 appear as popovers right after you confirm the key.
 - **Brazilian models** — with a Maritaca key, the Sabiá models (`maritaca/sabia-4`, `maritaca/sabiazinho-4`…) show up in the same selector, next to the OpenRouter models
 - **Real-time streaming** — responses appear as they are written, with a button to stop them
 - **Rendered Markdown** — bold, italics, code, headings.
-- **Attachments** — up to 8 files per message: PDF, ODT, TXT, MD, ODS, XLSX, CSV, JSON, PY, TOML, KDL, LUA, SH, BASH, FISH and images (PNG, JPG, WebP, SVG)
+- **Attachments** — up to 8 files per message: PDF, ODT, TXT, MD, ODS, ODP, XLSX, CSV, JSON, PY, TOML, KDL, LUA, SH, BASH, FISH and images (PNG, JPG, WebP, SVG)
 - **Multimodal** — send images as input for compatible models
   to analyze (GPT-4o, Claude, Gemini, etc.)
 - **Web search with sources** — the 🌐 button next to "Send" turns on OpenRouter's web search (`openrouter:web_search`) for the next message only; the pages consulted appear numbered, with links, at the end of the response. The button turns itself off after each message, because search has an extra cost. It works with models that accept tools, e.g. Deepseek, Claude, Gemini, Qwen, Zai.
-- **Clickable links** — URLs in responses are rendered as links (images and spreadsheets). Images are saved in `/home/user/.local/share/por-ai/images` and spreadsheets in `/home/user/.local/share/por-ai/spreadsheets`
+- **Presentations** — ask for slides in the chat and get an `.odp` file (LibreOffice Impress; PowerPoint opens it too). The app handles the layout: it adjusts font sizes, splits slides with too much text, and builds native tables, charts and speaker notes. Attach an `.odp` to ask for changes to an existing presentation.
+- **Clickable links** — URLs in responses are rendered as links (images, spreadsheets and presentations). Images are saved in `/home/user/.local/share/por-ai/images`, spreadsheets in `/home/user/.local/share/por-ai/spreadsheets` and presentations in `/home/user/.local/share/por-ai/presentations`
 - **Privacy filter** — choose whether OpenRouter may use any provider, only those that don't train on your prompts, or only zero-retention ones; in the last case, the model list shows only compatible models.
 - **Automatic catalog update** — optional, once every 24 hours when the app opens
 - **Native interface** — GTK4 + Adwaita, integrated with the system theme (automatic dark/light mode). You can customize it by choosing from several themes such as Dracula, Nord and Everforest.

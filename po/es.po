@@ -1381,3 +1381,59 @@ msgstr ""
 "En los modelos de Maritaca no hay búsqueda web, filtro de privacidad ni "
 "prioridad del proveedor: esas funciones son de OpenRouter. El esfuerzo de "
 "razonamiento (botón 💭) funciona en S5."
+
+#: usr/share/por-ai/core/assistant.py:1400
+#, python-brace-format
+msgid "Baixar apresentação (.{ext})"
+msgstr "Descargar presentación (.{ext})"
+
+#: usr/share/por-ai/core/assistant.py:1042
+msgid "Instale python3-odfpy para anexar arquivos ODP."
+msgstr "Instala python3-odfpy para adjuntar archivos ODP."
+
+#: usr/share/por-ai/core/assistant.py:1044
+msgid ""
+"Arquivos .pptx não são suportados. Salve como .odp no LibreOffice Impress e "
+"anexe de novo."
+msgstr ""
+"Los archivos .pptx no son compatibles. Guárdalo como .odp en LibreOffice "
+"Impress y adjúntalo de nuevo."
+
+#: usr/share/por-ai/core/assistant.py:1596
+msgid "Instale python3-odfpy para ler arquivos ODP."
+msgstr "Instala python3-odfpy para leer archivos ODP."
+
+#: usr/share/por-ai/core/assistant.py:1623
+#, python-brace-format
+msgid "Erro ao ler ODP: {error}"
+msgstr "Error al leer el ODP: {error}"
+
+#: usr/share/por-ai/core/assistant.py:1625
+msgid "A apresentação está vazia."
+msgstr "La presentación está vacía."
+
+#: usr/share/por-ai/core/assistant.py:877
+msgid ""
+"A resposta foi cortada pelo limite de tokens do modelo antes de terminar. Se "
+"era uma planilha ou apresentação, peça uma versão mais curta, aumente o "
+"limite em Preferências ou use outro modelo."
+msgstr ""
+"La respuesta se cortó por el límite de tokens del modelo antes de terminar. "
+"Si era una hoja de cálculo o una presentación, pide una versión más corta, "
+"aumenta el límite en Preferencias o usa otro modelo."
+
+#: usr/share/por-ai/core/slide_gen.py:336
+msgid "Apresentação"
+msgstr "Presentación"
+
+#: usr/share/por-ai/core/slide_gen.py:678
+msgid "(cont.)"
+msgstr "(cont.)"
+
+#: usr/share/por-ai/core/slide_gen.py:771
+msgid "Sim"
+msgstr "Sí"
+
+#: usr/share/por-ai/core/slide_gen.py:771
+msgid "Não"
+msgstr "No"
